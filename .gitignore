@@ -1,2 +1,7 @@
 node_modules/
-test/screenshots/
+web/test/screenshots/
+.build/
+.swiftpm/
+xcuserdata/
+*.xcuserstate
+DerivedData/

@@ -1,0 +1,150 @@
+import SwiftUI
+
+struct HistoryView: View {
+    @EnvironmentObject var store: Store
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 8) {
+                    let sessions = store.data.finishedSessions
+                    if sessions.isEmpty {
+                        EmptyHint(text: "No finished sessions yet.")
+                    } else {
+                        ForEach(sessions) { session in
+                            NavigationLink {
+                                SessionDetailView(sessionId: session.id)
+                            } label: {
+                                SessionRow(session: session)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 24)
+            }
+            .navigationTitle("History")
+            .screen()
+        }
+    }
+}
+
+struct SessionDetailView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+
+    let sessionId: String
+    @State private var confirmDelete = false
+
+    private var sessionIndex: Int? {
+        store.data.sessions.firstIndex { $0.id == sessionId }
+    }
+
+    var body: some View {
+        Group {
+            if let index = sessionIndex {
+                detail(index: index)
+            } else {
+                EmptyHint(text: "This session no longer exists.").padding(.horizontal, 14)
+            }
+        }
+        .screen()
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { hideKeyboard() }
+                    .font(.system(size: 17, weight: .semibold))
+            }
+        }
+        .alert("Delete this session?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) {
+                store.deleteSession(id: sessionId)
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently removes it from history and progress.")
+        }
+    }
+
+    @ViewBuilder
+    private func detail(index: Int) -> some View {
+        let session = store.data.sessions[index]
+
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(Format.longDate(session.startedAt))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(Palette.text)
+                    Text(subtitle(for: session))
+                        .font(.system(size: 14))
+                        .foregroundColor(Palette.muted)
+                }
+                .padding(.top, 4)
+
+                ForEach(Array(session.entries.enumerated()), id: \.element.id) { entryIndex, entry in
+                    VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.name)
+                                .font(.system(size: 19, weight: .bold))
+                                .foregroundColor(Palette.text)
+                            if !entry.note.isEmpty {
+                                Text(entry.note)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Palette.warn)
+                            }
+                        }
+
+                        if entry.doneSets.isEmpty {
+                            Text("Not logged")
+                                .font(.system(size: 15))
+                                .foregroundColor(Palette.muted)
+                        } else {
+                            ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
+                                if set.done {
+                                    HStack(spacing: 8) {
+                                        Text("\(setIndex + 1)")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(Palette.ghost)
+                                            .frame(width: 20)
+
+                                        WeightField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].weight)
+
+                                        RepsField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].reps)
+
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 18, weight: .bold))
+                                            .foregroundColor(Palette.accentInk)
+                                            .frame(width: Metrics.tap, height: Metrics.tap)
+                                            .background(Palette.accent)
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
+                }
+
+                Button("Delete this session") { confirmDelete = true }
+                    .buttonStyle(BigButtonStyle(destructive: true))
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func subtitle(for session: Session) -> String {
+        var parts = [session.name, Format.time(session.startedAt)]
+        if let duration = session.duration {
+            parts.append(Format.duration(duration))
+        } else {
+            parts.append("in progress")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
