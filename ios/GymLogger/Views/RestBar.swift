@@ -55,11 +55,11 @@ struct RestBar: View {
             .frame(minHeight: 66)
             .background(Palette.surface2)
             .overlay(alignment: .top) { Rectangle().fill(Palette.line).frame(height: 1) }
-            .onChange(of: timer.endsAt) { _ in
+            .onChange(of: timer.endsAt) { _, _ in
                 // A new rest period (or +30s) re-arms the haptic.
                 buzzed = false
             }
-            .onChange(of: done) { isDone in
+            .onChange(of: done) { _, isDone in
                 // Haptic only when it finishes with the app in front; the local
                 // notification covers every other case.
                 if isDone && !buzzed {

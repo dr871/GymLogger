@@ -34,10 +34,10 @@ struct WeightField: View {
             .multilineTextAlignment(.center)
             .font(.system(size: 18, weight: .regular, design: .rounded))
             .monospacedDigit()
-            .onChange(of: text) { newText in
+            .onChange(of: text) { _, newText in
                 value = WeightField.parse(newText)
             }
-            .onChange(of: value) { newValue in
+            .onChange(of: value) { _, newValue in
                 guard WeightField.parse(text) != newValue else { return }
                 text = WeightField.format(newValue)
             }
@@ -72,10 +72,10 @@ struct RepsField: View {
             .multilineTextAlignment(.center)
             .font(.system(size: 18, weight: .regular, design: .rounded))
             .monospacedDigit()
-            .onChange(of: text) { newText in
+            .onChange(of: text) { _, newText in
                 value = Int(newText)
             }
-            .onChange(of: value) { newValue in
+            .onChange(of: value) { _, newValue in
                 guard Int(text) != newValue else { return }
                 text = newValue.map(String.init) ?? ""
             }
@@ -152,13 +152,11 @@ struct EmptyHint: View {
     }
 }
 
-/// Screen chrome: dark background, consistent horizontal padding.
+/// Screen chrome. The bars are left to the system so they render with the
+/// platform's own material; only the content ground is ours.
 struct ScreenBackground: ViewModifier {
     func body(content: Content) -> some View {
-        content
-            .background(Palette.bg.ignoresSafeArea())
-            .toolbarBackground(Palette.bg, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+        content.background(Palette.bg.ignoresSafeArea())
     }
 }
 

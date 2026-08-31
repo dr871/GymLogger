@@ -3,37 +3,39 @@
 A workout tracker with one job: show you what you lifted last time, right where
 you enter what you're lifting now.
 
-Native iOS app. No backend, no accounts, no login — everything lives on the
-phone.
-
-- **`ios/`** — the app. SwiftUI, iPhone, iOS 16+. **This is the one to build.**
-- **`web/`** — the original PWA prototype. Superseded, kept for reference.
+Native iOS app, SwiftUI, iPhone. No backend, no accounts, no login — everything
+lives on the phone.
 
 ## Building it
 
-You need a Mac with Xcode 15 or newer.
+Needs a Mac with **Xcode 26** (deploying to an iOS 26 device requires a matching
+Xcode). Deployment target is iOS 26.
 
 ```sh
 open ios/GymLogger.xcodeproj
 ```
 
-Then:
-
 1. Select the **GymLogger** target → **Signing & Capabilities**.
-2. Set **Team** to your Apple ID (add one under Xcode → Settings → Accounts).
-   A free Apple ID is enough.
+2. Set **Team** to your Apple ID — add one under Xcode → Settings → Accounts.
+   A free Apple ID is enough; no paid developer account needed.
 3. Change the bundle identifier from `com.example.GymLogger` to something
-   unique — `com.yourname.GymLogger`. Free accounts reject identifiers that
-   someone else already registered.
-4. Plug in your iPhone, pick it as the run destination, and press ⌘R.
-5. First run only: on the phone, **Settings → General → VPN & Device Management**
-   → trust your developer certificate.
+   unique, e.g. `com.yourname.GymLogger`. Free accounts reject identifiers
+   someone else has already registered.
+4. Plug in your iPhone, choose it as the run destination, press **⌘R**.
+5. First run only: on the phone, **Settings → General → VPN & Device
+   Management** → trust your developer certificate.
+6. Accept the notification prompt on first launch, or the rest timer can only
+   buzz while the app is open. It's re-offered under Settings in the app.
 
-With a free Apple ID the app stops launching after 7 days and you re-run ⌘R to
-renew it. A paid developer account ($99/yr) extends that to a year.
+### The 7-day cycle
 
-Grant the notification prompt when it appears, or the rest timer can only buzz
-while the app is open. It's also re-offered under Settings in the app.
+Free-account builds stop launching after 7 days. Plug in, press ⌘R, and it
+renews — the app is replaced in place and **your training history survives**.
+
+What does *not* survive is deleting the app: that removes its data container and
+everything in it. There is no server holding a copy. So use **Settings → Export
+all data** now and then and put the JSON somewhere safe — iCloud Drive, a mail
+to yourself, anywhere off the phone.
 
 ## What's pre-loaded
 
@@ -59,19 +61,18 @@ hold the weight.
 future session. Each session also stores a snapshot, so old records keep what
 was true at the time — renaming an exercise doesn't rewrite history.
 
-**The rest timer schedules a local notification with the system.** It reaches
-you with the app backgrounded, the phone locked, or the app killed outright —
-which is the main thing a native app buys over the web version, where iOS
-freezes the page the moment you switch away. The countdown itself is stored as
-an absolute end time and rendered from the wall clock, so it can't drift or
-stall. Length is per-exercise and takes effect immediately, even mid-session.
+**The rest timer schedules a local notification with the system**, so it reaches
+you with the app backgrounded, the phone locked, or killed outright. (Local
+notifications need no special entitlement, so this works on a free account.) The
+countdown itself is stored as an absolute end time and rendered from the wall
+clock, so it can't drift or stall. Length is per-exercise and takes effect
+immediately, even mid-session.
 
 **Progress** plots the heaviest working set per session for one exercise. For
 bodyweight work with no weight logged (the plank), it plots reps instead.
 
-**Export** in Settings shares the whole store — exercises, templates, every
-session — as a JSON file, via the standard share sheet. Worth doing now and
-then: the data lives only on this phone, and deleting the app erases it.
+**Export** shares the whole store as a JSON file through the standard share
+sheet.
 
 ## Layout
 
@@ -116,8 +117,6 @@ and decode robustness. No Xcode needed — it runs on the command line.
 The SwiftUI layer has no automated coverage; it was written against the tested
 core but has not been run on a device.
 
-## The web prototype
-
-`web/` holds the original PWA — a working, offline-capable version of the same
-app with 34 end-to-end browser tests (`cd web && node test/e2e.mjs`). It is
-superseded by the iOS app and isn't being kept in step with it.
+`ios/project.yml` regenerates an equivalent Xcode project via
+`brew install xcodegen && xcodegen generate` if the checked-in one ever goes
+stale.

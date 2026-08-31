@@ -6,7 +6,6 @@ import PackageDescription
 // tested without Xcode — including on Linux CI.
 let package = Package(
     name: "GymLoggerCore",
-    platforms: [.iOS(.v16), .macOS(.v13)],
     products: [
         .library(name: "GymLoggerCore", targets: ["GymLoggerCore"])
     ],

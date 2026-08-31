@@ -5,8 +5,6 @@ struct GymLoggerApp: App {
     @StateObject private var store = Store()
     @Environment(\.scenePhase) private var scenePhase
 
-    init() { Appearance.apply() }
-
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -14,7 +12,7 @@ struct GymLoggerApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Palette.accent)
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .active:
                 Task { await store.refreshNotificationStatus() }
@@ -38,27 +36,5 @@ struct RootView: View {
             SettingsView()
                 .tabItem { Label("Settings", systemImage: "gearshape") }
         }
-    }
-}
-
-enum Appearance {
-    /// UIKit-backed bars don't pick up SwiftUI colours on their own.
-    static func apply() {
-        let background = UIColor(Palette.bg)
-
-        let tab = UITabBarAppearance()
-        tab.configureWithOpaqueBackground()
-        tab.backgroundColor = background
-        UITabBar.appearance().standardAppearance = tab
-        UITabBar.appearance().scrollEdgeAppearance = tab
-
-        let nav = UINavigationBarAppearance()
-        nav.configureWithOpaqueBackground()
-        nav.backgroundColor = background
-        nav.titleTextAttributes = [.foregroundColor: UIColor(Palette.text)]
-        nav.largeTitleTextAttributes = [.foregroundColor: UIColor(Palette.text)]
-        UINavigationBar.appearance().standardAppearance = nav
-        UINavigationBar.appearance().scrollEdgeAppearance = nav
-        UINavigationBar.appearance().compactAppearance = nav
     }
 }
