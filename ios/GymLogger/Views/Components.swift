@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 
+@MainActor
 enum Haptics {
     static func tick() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -44,13 +45,16 @@ struct WeightField: View {
             .fieldChrome()
     }
 
+    /// Rejects anything that isn't a sane weight. `Double("inf")` parses, and a
+    /// runaway digit string overflows Int in the formatter — both trap later.
     static func parse(_ text: String) -> Double? {
-        Double(text.replacingOccurrences(of: ",", with: "."))
+        guard let value = Double(text.replacingOccurrences(of: ",", with: ".")),
+              value.isFinite, value.magnitude < 100_000 else { return nil }
+        return value
     }
 
     static func format(_ value: Double?) -> String {
-        guard let value else { return "" }
-        return value == value.rounded() ? String(Int(value)) : String(value)
+        Format.weight(value, empty: "")
     }
 }
 
@@ -188,8 +192,8 @@ enum Format {
         return String(format: "%d:%02d", total / 60, total % 60)
     }
 
-    static func weight(_ value: Double?) -> String {
-        guard let value else { return "—" }
+    static func weight(_ value: Double?, empty: String = "—") -> String {
+        guard let value, value.isFinite, value.magnitude < 1e15 else { return empty }
         return value == value.rounded() ? "\(Int(value))" : "\(value)"
     }
 
@@ -204,6 +208,7 @@ enum Format {
 
 /// Dismisses the keyboard from anywhere. The decimal pad has no return key, so
 /// every screen with a numeric field needs an explicit way out.
+@MainActor
 func hideKeyboard() {
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                     to: nil, from: nil, for: nil)

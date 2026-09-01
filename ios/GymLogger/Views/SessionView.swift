@@ -104,6 +104,12 @@ struct ExerciseCardView: View {
     let entryIndex: Int
     let entry: SessionEntry
 
+    /// A finished card collapses, but a mis-tapped last set has to be undoable:
+    /// tapping the count badge opens it back up.
+    @State private var expanded = false
+
+    private var showsRows: Bool { !entry.isComplete || expanded }
+
     private var lastEntry: LastEntry? {
         store.data.lastEntry(for: entry.exerciseId, excluding: store.data.sessions[sessionIndex].id)
     }
@@ -136,7 +142,7 @@ struct ExerciseCardView: View {
 
             // A collapsed card keeps a written note — those machine settings are
             // the whole point of recording them — but drops an empty field.
-            if !entry.isComplete || !entry.note.isEmpty {
+            if showsRows || !entry.note.isEmpty {
                 TextField("Machine settings (e.g. seat 4, handles 2)", text: noteBinding)
                     .font(.system(size: 14))
                     .foregroundStyle(Palette.warn)
@@ -152,12 +158,12 @@ struct ExerciseCardView: View {
                 suggestionBanner
             }
 
-            if !entry.isComplete {
+            if showsRows {
                 setRows
                 footer
             }
         }
-        .card(dimmed: entry.isComplete)
+        .card(dimmed: entry.isComplete && !expanded)
     }
 
     private var header: some View {
@@ -178,14 +184,27 @@ struct ExerciseCardView: View {
             }
             .buttonStyle(.plain)
 
-            Text("\(entry.doneSets.count)/\(entry.sets.count)")
+            Button {
+                expanded.toggle()
+            } label: {
+                HStack(spacing: 4) {
+                    Text("\(entry.doneSets.count)/\(entry.sets.count)")
+                        .monospacedDigit()
+                    if entry.isComplete {
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                }
                 .font(.system(size: 13))
-                .monospacedDigit()
                 .foregroundStyle(Palette.muted)
                 .padding(.horizontal, 11)
-                .padding(.vertical, 5)
+                .frame(minHeight: 44)
                 .background(Palette.surface2)
                 .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(!entry.isComplete)
+            .accessibilityLabel(entry.isComplete ? (expanded ? "Collapse sets" : "Show sets") : "Sets done")
         }
     }
 

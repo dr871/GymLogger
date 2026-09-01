@@ -69,6 +69,15 @@ struct SettingsView: View {
                         Text("Notifications on. Rest finishing will reach you with the app closed or the phone locked.")
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
+                    } else if store.notificationsDenied {
+                        // iOS returns false without a prompt once denied; the
+                        // only route back is the system Settings page.
+                        Button("Turn on alerts in Settings") {
+                            if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .buttonStyle(BigButtonStyle())
                     } else {
                         Button("Enable rest-finished alerts") {
                             Task { await store.requestNotificationPermission() }

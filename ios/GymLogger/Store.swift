@@ -13,6 +13,7 @@ final class Store: ObservableObject {
     }
 
     @Published private(set) var notificationsAllowed = false
+    @Published private(set) var notificationsDenied = false
 
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
@@ -41,7 +42,10 @@ final class Store: ObservableObject {
     static func load(from url: URL) -> AppData {
         guard let raw = try? Data(contentsOf: url) else { return .seed() }
         do {
-            let decoded = try AppData.decoder().decode(AppData.self, from: raw)
+            var decoded = try AppData.decoder().decode(AppData.self, from: raw)
+            // A rest that ended while the app was gone has already notified;
+            // relaunching into a permanent "Rest done" bar helps nobody.
+            if let timer = decoded.timer, timer.isDone() { decoded.timer = nil }
             // An empty file is indistinguishable from a fresh install for the
             // user, so give them the seeded workout rather than a blank app.
             return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? .seed() : decoded
@@ -98,6 +102,7 @@ final class Store: ObservableObject {
     }
 
     func deleteSession(id: String) {
+        if data.activeSessionId == id { cancelRest() }
         data.deleteSession(id: id)
     }
 
@@ -171,7 +176,9 @@ final class Store: ObservableObject {
     /// Rest length is a setting, not history: read live so an edit mid-workout
     /// applies to the very next set.
     func startRest(exerciseId: String, label: String) {
-        let seconds = data.restSec(for: exerciseId)
+        // The editors accept 0; a zero-length rest is a bar that reads "done"
+        // the instant it appears, so floor it here rather than in the fields.
+        let seconds = max(1, data.restSec(for: exerciseId))
         cancelPendingNotification()
 
         let state = RestTimerState(
@@ -239,6 +246,7 @@ final class Store: ObservableObject {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         notificationsAllowed = settings.authorizationStatus == .authorized
             || settings.authorizationStatus == .provisional
+        notificationsDenied = settings.authorizationStatus == .denied
     }
 
     func requestNotificationPermission() async {
