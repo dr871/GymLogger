@@ -16,11 +16,13 @@ final class Store: ObservableObject {
 
     private let fileURL: URL
     private var saveTask: Task<Void, Never>?
+    private let notificationDelegate = NotificationDelegate()
 
     init(fileURL: URL? = nil) {
         let url = fileURL ?? Store.defaultFileURL()
         self.fileURL = url
         self.data = Store.load(from: url)
+        UNUserNotificationCenter.current().delegate = notificationDelegate
     }
 
     // MARK: - Persistence
@@ -179,8 +181,15 @@ final class Store: ObservableObject {
             durationSec: seconds
         )
         data.timer = state
-        scheduleNotification(for: state)
         Haptics.tick()
+
+        Task {
+            await requestPermissionIfUndecided()
+            // Cancelled or replaced while the prompt was up? Then this one
+            // must not be scheduled, or it fires as an orphan.
+            guard data.timer?.notificationId == state.notificationId else { return }
+            scheduleNotification(for: state)
+        }
     }
 
     func addRestTime(_ seconds: Int) {
@@ -238,6 +247,14 @@ final class Store: ObservableObject {
         await refreshNotificationStatus()
     }
 
+    /// First rest timer of the app's life: this is the moment the permission
+    /// prompt explains itself, so ask here rather than at launch.
+    private func requestPermissionIfUndecided() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        guard settings.authorizationStatus == .notDetermined else { return }
+        await requestNotificationPermission()
+    }
+
     // MARK: - Export
 
     /// Writes the backup to a temp file for the share sheet.
@@ -252,5 +269,18 @@ final class Store: ObservableObject {
         } catch {
             return nil
         }
+    }
+}
+
+/// Without a delegate, iOS suppresses a notification whose app is in the
+/// foreground. Rest can finish while you're looking at the Progress tab, or
+/// while the phone lies on the bench with the app open — so present it anyway.
+final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
     }
 }

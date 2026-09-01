@@ -20,13 +20,13 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(template.name)
                                         .font(.system(size: 17, weight: .semibold))
-                                        .foregroundColor(Palette.text)
+                                        .foregroundStyle(Palette.text)
                                     Text("\(template.items.count) exercises")
                                         .font(.system(size: 14))
-                                        .foregroundColor(Palette.muted)
+                                        .foregroundStyle(Palette.muted)
                                 }
                                 Spacer()
-                                Image(systemName: "chevron.right").foregroundColor(Palette.ghost)
+                                Image(systemName: "chevron.right").foregroundStyle(Palette.ghost)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 13)
@@ -52,14 +52,14 @@ struct SettingsView: View {
                     LabeledField(label: "Rest timer (seconds)") {
                         RepsField(value: Binding(
                             get: { store.data.settings.defaultRestSec },
-                            set: { store.data.settings.defaultRestSec = max(5, $0 ?? 90) }
+                            set: { if let v = $0 { store.data.settings.defaultRestSec = v } }
                         ), placeholder: "90")
                     }
 
                     LabeledField(label: "Weight increase step (kg)") {
                         WeightField(value: Binding(
                             get: { store.data.settings.defaultIncrement },
-                            set: { store.data.settings.defaultIncrement = max(0.5, $0 ?? 2.5) }
+                            set: { if let v = $0 { store.data.settings.defaultIncrement = v } }
                         ), placeholder: "2.5")
                     }
 
@@ -68,7 +68,7 @@ struct SettingsView: View {
                     if store.notificationsAllowed {
                         Text("Notifications on. Rest finishing will reach you with the app closed or the phone locked.")
                             .font(.system(size: 13))
-                            .foregroundColor(Palette.muted)
+                            .foregroundStyle(Palette.muted)
                     } else {
                         Button("Enable rest-finished alerts") {
                             Task { await store.requestNotificationPermission() }
@@ -77,14 +77,14 @@ struct SettingsView: View {
 
                         Text("Without this the timer still runs, but it can only buzz while the app is open.")
                             .font(.system(size: 13))
-                            .foregroundColor(Palette.muted)
+                            .foregroundStyle(Palette.muted)
                     }
 
                     SectionHeader(title: "Backup")
 
                     Text("Exports everything — exercises, workouts and every session — as a JSON file.")
                         .font(.system(size: 13))
-                        .foregroundColor(Palette.muted)
+                        .foregroundStyle(Palette.muted)
 
                     Button("Export all data (JSON)") {
                         exportURL = store.exportFile()
@@ -94,7 +94,7 @@ struct SettingsView: View {
 
                     Text("All data lives on this phone only. Deleting the app erases it, so export now and then.")
                         .font(.system(size: 13))
-                        .foregroundColor(Palette.muted)
+                        .foregroundStyle(Palette.muted)
                         .padding(.top, 12)
                 }
                 .padding(.horizontal, 14)

@@ -36,6 +36,7 @@ struct SessionDetailView: View {
 
     let sessionId: String
     @State private var confirmDelete = false
+    @State private var pendingDelete = false
 
     private var sessionIndex: Int? {
         store.data.sessions.firstIndex { $0.id == sessionId }
@@ -58,9 +59,14 @@ struct SessionDetailView: View {
                     .font(.system(size: 17, weight: .semibold))
             }
         }
+        .onDisappear {
+            // Mutate only once every field bound to this session's index is
+            // off screen — see pendingDelete.
+            if pendingDelete { store.deleteSession(id: sessionId) }
+        }
         .alert("Delete this session?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
-                store.deleteSession(id: sessionId)
+                pendingDelete = true
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
@@ -78,10 +84,10 @@ struct SessionDetailView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Format.longDate(session.startedAt))
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(Palette.text)
+                        .foregroundStyle(Palette.text)
                     Text(subtitle(for: session))
                         .font(.system(size: 14))
-                        .foregroundColor(Palette.muted)
+                        .foregroundStyle(Palette.muted)
                 }
                 .padding(.top, 4)
 
@@ -90,25 +96,25 @@ struct SessionDetailView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.name)
                                 .font(.system(size: 19, weight: .bold))
-                                .foregroundColor(Palette.text)
+                                .foregroundStyle(Palette.text)
                             if !entry.note.isEmpty {
                                 Text(entry.note)
                                     .font(.system(size: 13))
-                                    .foregroundColor(Palette.warn)
+                                    .foregroundStyle(Palette.warn)
                             }
                         }
 
                         if entry.doneSets.isEmpty {
                             Text("Not logged")
                                 .font(.system(size: 15))
-                                .foregroundColor(Palette.muted)
+                                .foregroundStyle(Palette.muted)
                         } else {
                             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
                                 if set.done {
                                     HStack(spacing: 8) {
                                         Text("\(setIndex + 1)")
                                             .font(.system(size: 14))
-                                            .foregroundColor(Palette.ghost)
+                                            .foregroundStyle(Palette.ghost)
                                             .frame(width: 20)
 
                                         WeightField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].weight)
@@ -117,7 +123,7 @@ struct SessionDetailView: View {
 
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 18, weight: .bold))
-                                            .foregroundColor(Palette.accentInk)
+                                            .foregroundStyle(Palette.accentInk)
                                             .frame(width: Metrics.tap, height: Metrics.tap)
                                             .background(Palette.accent)
                                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))

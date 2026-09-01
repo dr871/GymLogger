@@ -31,7 +31,7 @@ struct ProgressTab: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("\(exercise.name) — top set (\(usesWeight ? "kg" : "reps"))")
                                     .font(.system(size: 14))
-                                    .foregroundColor(Palette.muted)
+                                    .foregroundStyle(Palette.muted)
 
                                 chart(series: series, usesWeight: usesWeight)
                             }
@@ -43,10 +43,10 @@ struct ProgressTab: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(Format.date(point.date))
                                             .font(.system(size: 17, weight: .semibold))
-                                            .foregroundColor(Palette.text)
+                                            .foregroundStyle(Palette.text)
                                         Text(rowSubtitle(point))
                                             .font(.system(size: 14))
-                                            .foregroundColor(Palette.muted)
+                                            .foregroundStyle(Palette.muted)
                                     }
                                     Spacer()
                                 }
@@ -92,7 +92,7 @@ struct ProgressTab: View {
         if points.isEmpty {
             Text("No data yet — log this exercise and it will show up here.")
                 .font(.system(size: 15))
-                .foregroundColor(Palette.muted)
+                .foregroundStyle(Palette.muted)
                 .padding(.vertical, 20)
         } else {
             Chart {

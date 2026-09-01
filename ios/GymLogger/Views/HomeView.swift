@@ -75,14 +75,14 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Format.date(session.startedAt))
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(Palette.text)
+                    .foregroundStyle(Palette.text)
                 Text("\(session.name) · \(session.workedExerciseCount) exercises · \(session.completedSetCount) sets")
                     .font(.system(size: 14))
-                    .foregroundColor(Palette.muted)
+                    .foregroundStyle(Palette.muted)
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .foregroundColor(Palette.ghost)
+                .foregroundStyle(Palette.ghost)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)

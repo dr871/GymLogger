@@ -61,7 +61,7 @@ struct ChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 15, weight: filled ? .semibold : .regular))
-            .foregroundColor(filled ? Palette.accentInk : tint)
+            .foregroundStyle(filled ? Palette.accentInk : tint)
             .padding(.horizontal, 15)
             .frame(minHeight: 46)
             .background(filled ? Palette.accent : Palette.surface2)
@@ -82,7 +82,7 @@ struct BigButtonStyle: ButtonStyle {
             .padding(primary ? 20 : 14)
             .frame(minHeight: primary ? 84 : Metrics.tap)
             .background(primary ? Palette.accent : Palette.surface)
-            .foregroundColor(primary ? Palette.accentInk : (destructive ? Palette.danger : Palette.text))
+            .foregroundStyle(primary ? Palette.accentInk : (destructive ? Palette.danger : Palette.text))
             .clipShape(RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Metrics.radius, style: .continuous)

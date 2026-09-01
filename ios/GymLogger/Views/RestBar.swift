@@ -26,11 +26,11 @@ struct RestBar: View {
                         Text(done ? "Rest done" : Format.clock(remaining))
                             .font(.system(size: 26, weight: .regular, design: .rounded))
                             .monospacedDigit()
-                            .foregroundColor(done ? Palette.accent : Palette.text)
+                            .foregroundStyle(done ? Palette.accent : Palette.text)
                         if !timer.label.isEmpty {
                             Text(timer.label)
                                 .font(.system(size: 13))
-                                .foregroundColor(Palette.muted)
+                                .foregroundStyle(Palette.muted)
                                 .lineLimit(1)
                         }
                     }

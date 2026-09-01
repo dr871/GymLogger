@@ -86,7 +86,7 @@ struct RepsField: View {
 private struct FieldChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .foregroundColor(Palette.text)
+            .foregroundStyle(Palette.text)
             .padding(.horizontal, 6)
             .frame(minHeight: Metrics.tap)
             .background(Palette.surface2)
@@ -110,7 +110,7 @@ struct LabeledField<Content: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(label)
-                .foregroundColor(Palette.muted)
+                .foregroundStyle(Palette.muted)
             Spacer(minLength: 8)
             content
                 .frame(maxWidth: 150)
@@ -134,7 +134,7 @@ struct SectionHeader: View {
         Text(title.uppercased())
             .font(.system(size: 13, weight: .semibold))
             .kerning(1.1)
-            .foregroundColor(Palette.muted)
+            .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 20)
             .padding(.bottom, 2)
@@ -146,7 +146,7 @@ struct EmptyHint: View {
     var body: some View {
         Text(text)
             .font(.system(size: 15))
-            .foregroundColor(Palette.muted)
+            .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 12)
     }

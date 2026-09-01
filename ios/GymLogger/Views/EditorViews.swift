@@ -58,7 +58,7 @@ struct TemplateEditorView: View {
                 LabeledField(label: "Name") {
                     TextField("Workout name", text: $store.data.templates[index].name)
                         .multilineTextAlignment(.trailing)
-                        .foregroundColor(Palette.text)
+                        .foregroundStyle(Palette.text)
                 }
 
                 SectionHeader(title: "Exercises")
@@ -76,10 +76,10 @@ struct TemplateEditorView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(store.exercise(id: item.exerciseId)?.name ?? "Missing exercise")
                                     .font(.system(size: 19, weight: .bold))
-                                    .foregroundColor(Palette.text)
+                                    .foregroundStyle(Palette.text)
                                 Text("rest \(store.data.restSec(for: item.exerciseId))s · +\(Format.weight(store.data.increment(for: item.exerciseId))) kg")
                                     .font(.system(size: 13))
-                                    .foregroundColor(Palette.muted)
+                                    .foregroundStyle(Palette.muted)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .frame(minHeight: 44)
@@ -88,14 +88,14 @@ struct TemplateEditorView: View {
 
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Sets").font(.system(size: 13)).foregroundColor(Palette.muted)
+                                Text("Sets").font(.system(size: 13)).foregroundStyle(Palette.muted)
                                 RepsField(value: Binding(
                                     get: { store.data.templates[index].items[itemIndex].sets },
-                                    set: { store.data.templates[index].items[itemIndex].sets = max(1, $0 ?? 3) }
+                                    set: { if let v = $0 { store.data.templates[index].items[itemIndex].sets = v } }
                                 ), placeholder: "3")
                             }
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Target reps").font(.system(size: 13)).foregroundColor(Palette.muted)
+                                Text("Target reps").font(.system(size: 13)).foregroundStyle(Palette.muted)
                                 RepsField(value: $store.data.templates[index].items[itemIndex].target, placeholder: "12")
                             }
                         }
@@ -156,15 +156,15 @@ struct ExerciseEditorView: View {
                         LabeledField(label: "Name") {
                             TextField("Name", text: $store.data.exercises[index].name)
                                 .multilineTextAlignment(.trailing)
-                                .foregroundColor(Palette.text)
+                                .foregroundStyle(Palette.text)
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Machine settings note")
                                 .font(.system(size: 14))
-                                .foregroundColor(Palette.muted)
+                                .foregroundStyle(Palette.muted)
                             TextField("e.g. seat 4, handles 2", text: $store.data.exercises[index].notes)
-                                .foregroundColor(Palette.warn)
+                                .foregroundStyle(Palette.warn)
                                 .padding(.horizontal, 12)
                                 .frame(minHeight: Metrics.tap)
                                 .background(Palette.surface2)
@@ -181,7 +181,7 @@ struct ExerciseEditorView: View {
 
                         Text("The note shows on this exercise every session.")
                             .font(.system(size: 13))
-                            .foregroundColor(Palette.muted)
+                            .foregroundStyle(Palette.muted)
 
                         LabeledField(label: "Rest timer (sec)") {
                             RepsField(value: $store.data.exercises[index].restSec,
@@ -195,7 +195,7 @@ struct ExerciseEditorView: View {
 
                         Text("Leave blank to use the defaults from Settings.")
                             .font(.system(size: 13))
-                            .foregroundColor(Palette.muted)
+                            .foregroundStyle(Palette.muted)
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 24)
@@ -230,7 +230,7 @@ struct ExercisePickerView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         TextField("New exercise name", text: $newName)
-                            .foregroundColor(Palette.text)
+                            .foregroundStyle(Palette.text)
                             .padding(.horizontal, 12)
                             .frame(minHeight: Metrics.tap)
                             .background(Palette.surface2)
@@ -256,13 +256,13 @@ struct ExercisePickerView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(exercise.name)
                                         .font(.system(size: 17, weight: .semibold))
-                                        .foregroundColor(Palette.text)
+                                        .foregroundStyle(Palette.text)
                                     Text(subtitle(for: exercise))
                                         .font(.system(size: 14))
-                                        .foregroundColor(Palette.muted)
+                                        .foregroundStyle(Palette.muted)
                                 }
                                 Spacer()
-                                Image(systemName: "plus").foregroundColor(Palette.ghost)
+                                Image(systemName: "plus").foregroundStyle(Palette.ghost)
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 13)
@@ -283,7 +283,7 @@ struct ExercisePickerView: View {
             .navigationTitle("Add exercise")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
             }

@@ -21,10 +21,10 @@ struct SessionView: View {
         .navigationTitle(store.activeSession?.name ?? "Workout")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("Finish") { finish() }
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(Palette.accent)
+                    .foregroundStyle(Palette.accent)
             }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
@@ -139,7 +139,7 @@ struct ExerciseCardView: View {
             if !entry.isComplete || !entry.note.isEmpty {
                 TextField("Machine settings (e.g. seat 4, handles 2)", text: noteBinding)
                     .font(.system(size: 14))
-                    .foregroundColor(Palette.warn)
+                    .foregroundStyle(Palette.warn)
                     .padding(.vertical, 10)
                     .frame(minHeight: 44)
                     .overlay(alignment: .bottom) {
@@ -168,10 +168,10 @@ struct ExerciseCardView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
                         .font(.system(size: 19, weight: .bold))
-                        .foregroundColor(Palette.text)
+                        .foregroundStyle(Palette.text)
                     Text("\(entry.sets.count) × \(entry.target.map(String.init) ?? "—") · rest \(store.data.restSec(for: entry.exerciseId))s")
                         .font(.system(size: 13))
-                        .foregroundColor(Palette.muted)
+                        .foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: 44)
@@ -181,7 +181,7 @@ struct ExerciseCardView: View {
             Text("\(entry.doneSets.count)/\(entry.sets.count)")
                 .font(.system(size: 13))
                 .monospacedDigit()
-                .foregroundColor(Palette.muted)
+                .foregroundStyle(Palette.muted)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 5)
                 .background(Palette.surface2)
@@ -199,7 +199,7 @@ struct ExerciseCardView: View {
         let suggestion = store.data.suggestion(for: entry.exerciseId, excluding: store.data.sessions[sessionIndex].id)
         return VStack(alignment: .leading, spacing: 8) {
             suggestionText(suggestion)
-                .foregroundColor(Palette.accent)
+                .foregroundStyle(Palette.accent)
 
             Button("Keep \(Format.weight(suggestion.lastWeight))") {
                 store.ignoreSuggestion(entryIndex: entryIndex)
@@ -224,14 +224,14 @@ struct ExerciseCardView: View {
                 HStack(spacing: 6) {
                     Text("\(setIndex + 1)")
                         .font(.system(size: 14))
-                        .foregroundColor(Palette.ghost)
+                        .foregroundStyle(Palette.ghost)
                         .frame(width: 20)
 
                     // Last session, greyed out, right beside today's fields.
                     Text(Format.lastSet(lastEntry?.entry.sets[safe: setIndex]))
                         .font(.system(size: 14))
                         .monospacedDigit()
-                        .foregroundColor(Palette.muted)
+                        .foregroundStyle(Palette.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .frame(minWidth: 92, alignment: .leading)
@@ -283,7 +283,7 @@ struct TickButton: View {
                 if done {
                     Image(systemName: "checkmark")
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(Palette.accentInk)
+                        .foregroundStyle(Palette.accentInk)
                 } else {
                     // An empty square reads as a disabled field; a ring reads
                     // as "tap me".

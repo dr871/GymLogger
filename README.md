@@ -24,8 +24,9 @@ open ios/GymLogger.xcodeproj
 4. Plug in your iPhone, choose it as the run destination, press **⌘R**.
 5. First run only: on the phone, **Settings → General → VPN & Device
    Management** → trust your developer certificate.
-6. Accept the notification prompt on first launch, or the rest timer can only
-   buzz while the app is open. It's re-offered under Settings in the app.
+6. The first time you tick off a set, iOS asks to allow notifications. Accept,
+   or the rest timer can only buzz while the app is in front. It's re-offered
+   under Settings in the app.
 
 ### The 7-day cycle
 
