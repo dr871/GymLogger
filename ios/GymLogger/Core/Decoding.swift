@@ -22,7 +22,7 @@ extension KeyedDecodingContainer {
 // CodingKeys, and encoding still uses these so the two stay in step.
 
 extension Settings {
-    enum CodingKeys: String, CodingKey { case defaultRestSec, defaultIncrement }
+    enum CodingKeys: String, CodingKey { case defaultRestSec, defaultIncrement, lastExportedAt }
 }
 
 extension Exercise {
@@ -64,7 +64,8 @@ extension Settings {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             defaultRestSec: c.or(.defaultRestSec, 90),
-            defaultIncrement: c.or(.defaultIncrement, 2.5)
+            defaultIncrement: c.or(.defaultIncrement, 2.5),
+            lastExportedAt: c.maybe(.lastExportedAt)
         )
     }
 }

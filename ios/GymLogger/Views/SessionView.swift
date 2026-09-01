@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SessionView: View {
     @EnvironmentObject var store: Store
@@ -20,6 +21,11 @@ struct SessionView: View {
         .screen()
         .navigationTitle(store.activeSession?.name ?? "Workout")
         .navigationBarTitleDisplayMode(.inline)
+        // Phone on the bench between sets: don't make every glance cost a
+        // Face ID. Only while this screen is up, so a forgotten session
+        // doesn't pin the display on all evening.
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Finish") { finish() }
@@ -65,8 +71,18 @@ struct SessionView: View {
 
     @ViewBuilder
     private func content(sessionIndex: Int) -> some View {
+        let startedAt = store.data.sessions[sessionIndex].startedAt
+
         ScrollView {
             LazyVStack(spacing: 12) {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    Text("Started \(Format.time(startedAt)) · \(Format.duration(context.date.timeIntervalSince(startedAt)))")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 2)
+                }
+
                 ForEach(Array(store.data.sessions[sessionIndex].entries.enumerated()), id: \.element.id) { entryIndex, entry in
                     ExerciseCardView(
                         sessionIndex: sessionIndex,
@@ -107,6 +123,7 @@ struct ExerciseCardView: View {
     /// A finished card collapses, but a mis-tapped last set has to be undoable:
     /// tapping the count badge opens it back up.
     @State private var expanded = false
+    @State private var confirmRemove = false
 
     private var showsRows: Bool { !entry.isComplete || expanded }
 
@@ -164,6 +181,12 @@ struct ExerciseCardView: View {
             }
         }
         .card(dimmed: entry.isComplete && !expanded)
+        .alert("Remove \(entry.name) from today?", isPresented: $confirmRemove) {
+            Button("Remove", role: .destructive) { store.removeEntry(entryIndex: entryIndex) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Anything logged for it today is lost. It stays in the workout template.")
+        }
     }
 
     private var header: some View {
@@ -279,7 +302,7 @@ struct ExerciseCardView: View {
                     .buttonStyle(ChipStyle())
                 Button("Rest") { store.startRest(exerciseId: entry.exerciseId, label: entry.name) }
                     .buttonStyle(ChipStyle())
-                Button("Remove") { store.removeEntry(entryIndex: entryIndex) }
+                Button("Remove") { confirmRemove = true }
                     .buttonStyle(ChipStyle(tint: Palette.danger))
             }
         }

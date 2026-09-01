@@ -378,3 +378,112 @@ final class CoreTests: XCTestCase {
         XCTAssertThrowsError(try AppData.decoder().decode(AppData.self, from: json))
     }
 }
+
+final class LibraryAndRestoreTests: XCTestCase {
+
+    func testDeletingAnExerciseRemovesItFromEveryTemplateButNotHistory() {
+        var data = AppData.seed()
+        let legPress = data.exercises[0].id
+        data.startSession(templateId: data.templates[0].id)
+        data.sessions[0].entries[0].sets[0].done = true
+        data.finishSession()
+
+        data.deleteExercise(id: legPress)
+
+        XCTAssertNil(data.exercise(id: legPress))
+        XCTAssertFalse(data.templates[0].items.contains { $0.exerciseId == legPress })
+        XCTAssertEqual(data.templates[0].items.count, 5)
+        XCTAssertEqual(data.sessions[0].entries[0].name, "Leg press", "history keeps its snapshot")
+        XCTAssertNotNil(data.lastEntry(for: legPress), "and the lookup still works on the id")
+    }
+
+    func testDeletingAnExerciseLeavesOtherTemplatesAlone() {
+        var data = AppData.seed()
+        let plank = data.exercises[5].id
+        data.templates.append(WorkoutTemplate(name: "Core", items: [TemplateItem(exerciseId: plank, sets: 3, target: 60)]))
+
+        data.deleteExercise(id: data.exercises[0].id)
+
+        XCTAssertEqual(data.templates[1].items.count, 1)
+        XCTAssertEqual(data.orderedExercises.count, 5)
+    }
+
+    func testRestoreRoundTripsAnExport() throws {
+        var original = AppData.seed()
+        original.exercises[0].notes = "seat 4"
+        original.startSession(templateId: original.templates[0].id)
+        original.sessions[0].entries[0].sets[0].done = true
+        original.sessions[0].entries[0].sets[0].weight = 60
+        original.finishSession()
+        original.settings.lastExportedAt = Date()
+
+        let restored = try AppData.restore(from: try original.exportJSON())
+
+        XCTAssertEqual(restored.exercises.map(\.name), original.exercises.map(\.name))
+        XCTAssertEqual(restored.exercises[0].notes, "seat 4")
+        XCTAssertEqual(restored.sessions.count, 1)
+        XCTAssertEqual(restored.sessions[0].entries[0].sets[0].weight, 60)
+        XCTAssertNotNil(restored.settings.lastExportedAt)
+    }
+
+    func testRestoreRefusesGarbage() {
+        XCTAssertThrowsError(try AppData.restore(from: "not json".data(using: .utf8)!)) { error in
+            XCTAssertEqual(error as? RestoreError, .unreadable)
+        }
+    }
+
+    func testRestoreRefusesAnEmptyStore() {
+        let empty = "{\"version\":1,\"exercises\":[],\"templates\":[],\"sessions\":[]}".data(using: .utf8)!
+        XCTAssertThrowsError(try AppData.restore(from: empty)) { error in
+            XCTAssertEqual(error as? RestoreError, .empty)
+        }
+    }
+
+    func testRestoreDropsAnExpiredTimerAndADanglingActiveSession() throws {
+        var data = AppData.seed()
+        data.activeSessionId = "s_gone"
+        data.timer = RestTimerState(exerciseId: "x", label: "", endsAt: Date().addingTimeInterval(-60), durationSec: 90)
+
+        let restored = try AppData.restore(from: try data.exportJSON())
+
+        XCTAssertNil(restored.activeSessionId)
+        XCTAssertNil(restored.timer)
+    }
+
+    func testRestoreKeepsALiveTimerAndARealActiveSession() throws {
+        var data = AppData.seed()
+        data.startSession(templateId: data.templates[0].id)
+        data.timer = RestTimerState(exerciseId: "x", label: "", endsAt: Date().addingTimeInterval(60), durationSec: 90)
+
+        let restored = try AppData.restore(from: try data.exportJSON())
+
+        XCTAssertEqual(restored.activeSessionId, data.activeSessionId)
+        XCTAssertNotNil(restored.timer)
+    }
+
+    func testPreviewDescribesWhatARestoreWouldBring() {
+        var data = AppData.seed()
+        for days in [10, 5, 1] {
+            data.startSession(templateId: data.templates[0].id)
+            let i = data.activeSessionIndex!
+            data.sessions[i].startedAt = Date().addingTimeInterval(TimeInterval(-days * 86_400))
+            data.sessions[i].entries[0].sets[0].done = true
+            data.finishSession(at: data.sessions[i].startedAt.addingTimeInterval(3600))
+        }
+        data.startSession(templateId: data.templates[0].id)
+
+        let preview = data.preview
+        XCTAssertEqual(preview.exerciseCount, 6)
+        XCTAssertEqual(preview.templateCount, 1)
+        XCTAssertEqual(preview.sessionCount, 3, "in-progress session is not counted as history")
+        XCTAssertTrue(preview.hasActiveSession)
+        XCTAssertTrue(preview.firstSession! < preview.lastSession!)
+    }
+
+    func testPruneLeavesARunningTimerAlone() {
+        var data = AppData.seed()
+        data.timer = RestTimerState(exerciseId: "x", label: "", endsAt: Date().addingTimeInterval(30), durationSec: 90)
+        data.pruneExpiredTimer()
+        XCTAssertNotNil(data.timer)
+    }
+}

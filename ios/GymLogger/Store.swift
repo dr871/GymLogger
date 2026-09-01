@@ -39,13 +39,22 @@ final class Store: ObservableObject {
         return dir.appendingPathComponent("data.json")
     }
 
+    /// A copy of the live file, kept current, in the app's Documents folder —
+    /// which iOS shows in the Files app under On My iPhone. The live file stays
+    /// private in Application Support so a stray delete in Files costs nothing.
+    static func backupURL() -> URL? {
+        guard let docs = try? FileManager.default.url(for: .documentDirectory,
+                                                      in: .userDomainMask,
+                                                      appropriateFor: nil,
+                                                      create: true) else { return nil }
+        return docs.appendingPathComponent("GymLogger-backup.json")
+    }
+
     static func load(from url: URL) -> AppData {
         guard let raw = try? Data(contentsOf: url) else { return .seed() }
         do {
             var decoded = try AppData.decoder().decode(AppData.self, from: raw)
-            // A rest that ended while the app was gone has already notified;
-            // relaunching into a permanent "Rest done" bar helps nobody.
-            if let timer = decoded.timer, timer.isDone() { decoded.timer = nil }
+            decoded.pruneExpiredTimer()
             // An empty file is indistinguishable from a fresh install for the
             // user, so give them the seeded workout rather than a blank app.
             return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? .seed() : decoded
@@ -74,6 +83,9 @@ final class Store: ObservableObject {
         do {
             let encoded = try data.exportJSON()
             try encoded.write(to: fileURL, options: .atomic)
+            if let backup = Store.backupURL() {
+                try? encoded.write(to: backup, options: .atomic)
+            }
         } catch {
             print("GymLogger: save failed — \(error)")
         }
@@ -169,6 +181,47 @@ final class Store: ObservableObject {
               data.sessions[s].entries.indices.contains(entryIndex) else { return }
         let exerciseId = data.sessions[s].entries[entryIndex].exerciseId
         data.setNote(note, exerciseId: exerciseId, sessionIndex: s, entryIndex: entryIndex)
+    }
+
+    // MARK: - Library
+
+    func deleteExercise(id: String) {
+        data.deleteExercise(id: id)
+    }
+
+    // MARK: - Restore
+
+    struct PendingRestore {
+        let data: AppData
+        let preview: RestorePreview
+    }
+
+    /// Reads and validates a backup without touching the live store, so the
+    /// user can see what they're about to replace everything with.
+    func previewRestore(url: URL) throws -> PendingRestore {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        guard let raw = try? Data(contentsOf: url) else { throw RestoreError.unreadable }
+        let restored = try AppData.restore(from: raw)
+        return PendingRestore(data: restored, preview: restored.preview)
+    }
+
+    func commitRestore(_ pending: PendingRestore) {
+        cancelRest()
+        data = pending.data
+        if let timer = data.timer { scheduleNotification(for: timer) }
+        saveNow()
+    }
+
+    func markExported() {
+        data.settings.lastExportedAt = Date()
+    }
+
+    /// Days since a backup last left the phone; nil when never.
+    var daysSinceExport: Int? {
+        guard let at = data.settings.lastExportedAt else { return nil }
+        return Int(Date().timeIntervalSince(at) / 86_400)
     }
 
     // MARK: - Rest timer

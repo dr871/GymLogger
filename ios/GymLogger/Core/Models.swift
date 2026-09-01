@@ -74,6 +74,9 @@ struct Session: Codable, Identifiable, Hashable {
 struct Settings: Codable, Hashable {
     var defaultRestSec: Int = 90
     var defaultIncrement: Double = 2.5
+    /// When a backup was last handed off via the share sheet. The phone is the
+    /// only copy, so Home nudges when this gets stale.
+    var lastExportedAt: Date?
 }
 
 /// The rest timer is stored as an absolute end time, never a remaining count.

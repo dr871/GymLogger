@@ -34,9 +34,16 @@ Free-account builds stop launching after 7 days. Plug in, press ⌘R, and it
 renews — the app is replaced in place and **your training history survives**.
 
 What does *not* survive is deleting the app: that removes its data container and
-everything in it. There is no server holding a copy. So use **Settings → Export
-all data** now and then and put the JSON somewhere safe — iCloud Drive, a mail
-to yourself, anywhere off the phone.
+everything in it. There is no server holding a copy. Two things cover that:
+
+- **Settings → Export all data** hands the JSON to the share sheet. Put it
+  anywhere off the phone. Home nudges you when it's been a fortnight.
+- **Settings → Restore from backup** loads one back, showing what's in the file
+  and what it will replace before anything changes.
+
+A copy of the live data is also kept current in the **Files** app, under On My
+iPhone → GymLogger → `GymLogger-backup.json`, so you can copy it out without
+opening the app. Deleting that copy is harmless; the live file is elsewhere.
 
 ## What's pre-loaded
 
@@ -44,7 +51,8 @@ to yourself, anywhere off the phone.
 cable row, leg curl (3×12, 90s rest), plank (3×40).
 
 All of it is editable: rename anything, change sets and reps, reorder with the
-up/down buttons, add or remove exercises, create more workout templates.
+up/down buttons, add or remove exercises, delete an exercise from the library
+outright, create more workout templates.
 
 ## How it works
 
@@ -69,6 +77,9 @@ countdown itself is stored as an absolute end time and rendered from the wall
 clock, so it can't drift or stall. Length is per-exercise and takes effect
 immediately, even mid-session.
 
+**During a session the screen stays awake**, so a phone on the bench doesn't
+need unlocking between sets. Only while the session screen is showing.
+
 **Progress** plots the heaviest working set per session for one exercise. For
 bodyweight work with no weight logged (the plank), it plots reps instead.
 
@@ -84,7 +95,7 @@ sheet.
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 30 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 39 unit tests over the logic layer |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
 that decides what number to show you builds and tests anywhere, including on
@@ -111,9 +122,9 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-30 tests over the logic layer: the suggestion rule and every way it should
+39 tests over the logic layer: the suggestion rule and every way it should
 *not* fire, per-exercise history lookup, note propagation, the wall-clock timer,
-and decode robustness. No Xcode needed — it runs on the command line.
+decode robustness, exercise deletion, and backup restore. No Xcode needed — it runs on the command line.
 
 The SwiftUI layer has no automated coverage; it was written against the tested
 core but has not been run on a device.

@@ -56,6 +56,14 @@ struct HomeView: View {
                             .buttonStyle(.plain)
                         }
                     }
+
+                    if let nudge = exportNudge {
+                        Text(nudge)
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.warn)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 8)
+                    }
                 }
                 .padding(.horizontal, 14)
                 .padding(.bottom, 24)
@@ -64,6 +72,17 @@ struct HomeView: View {
             .navigationDestination(isPresented: $showSession) { SessionView() }
             .screen()
         }
+    }
+
+    /// The phone is the only copy. Say so, quietly, once there's something
+    /// worth losing and it's been a while.
+    private var exportNudge: String? {
+        guard !store.data.finishedSessions.isEmpty else { return nil }
+        guard let days = store.daysSinceExport else {
+            return "This history exists only on this phone. Settings › Export to keep a copy elsewhere."
+        }
+        guard days >= 14 else { return nil }
+        return "Last exported \(days) days ago. Settings › Export to refresh the copy off this phone."
     }
 }
 

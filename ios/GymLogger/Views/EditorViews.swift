@@ -142,7 +142,10 @@ struct TemplateEditorView: View {
 
 struct ExerciseEditorView: View {
     @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
     let exerciseId: String
+    @State private var confirmDelete = false
+    @State private var pendingDelete = false
 
     private var index: Int? {
         store.data.exercises.firstIndex { $0.id == exerciseId }
@@ -196,6 +199,10 @@ struct ExerciseEditorView: View {
                         Text("Leave blank to use the defaults from Settings.")
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
+
+                        Button("Delete this exercise") { confirmDelete = true }
+                            .buttonStyle(BigButtonStyle(destructive: true))
+                            .padding(.top, 20)
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 24)
@@ -207,6 +214,20 @@ struct ExerciseEditorView: View {
         .screen()
         .navigationTitle("Edit exercise")
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            // Deferred so no field bound to this exercise's index is on screen
+            // when it goes.
+            if pendingDelete { store.deleteExercise(id: exerciseId) }
+        }
+        .alert("Delete this exercise?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) {
+                pendingDelete = true
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It comes out of every workout. Past sessions keep their records.")
+        }
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()

@@ -170,6 +170,26 @@ extension AppData {
         }
     }
 
+    // MARK: - Library
+
+    /// Removes an exercise from the library and from every workout template.
+    /// Sessions are untouched: they carry their own name snapshot, and the
+    /// per-exercise history lookup keeps working on the id.
+    mutating func deleteExercise(id: String) {
+        exercises.removeAll { $0.id == id }
+        for i in templates.indices {
+            templates[i].items.removeAll { $0.exerciseId == id }
+        }
+    }
+
+    // MARK: - Housekeeping
+
+    /// A rest that ended while the app was away has already notified; carrying
+    /// it back in as a permanent "Rest done" bar helps nobody.
+    mutating func pruneExpiredTimer(at now: Date = Date()) {
+        if let timer, timer.isDone(at: now) { self.timer = nil }
+    }
+
     // MARK: - Progress
 
     /// Oldest first, for charting.
@@ -221,5 +241,52 @@ extension AppData {
 
     func exportJSON() throws -> Data {
         try AppData.encoder().encode(self)
+    }
+}
+
+// MARK: - Restore
+
+struct RestorePreview: Equatable {
+    var exerciseCount: Int
+    var templateCount: Int
+    var sessionCount: Int
+    var firstSession: Date?
+    var lastSession: Date?
+    var hasActiveSession: Bool
+}
+
+enum RestoreError: Error, Equatable {
+    /// Not JSON this app wrote, or not JSON at all.
+    case unreadable
+    /// Decoded, but there is nothing in it — restoring would only wipe.
+    case empty
+}
+
+extension AppData {
+    var preview: RestorePreview {
+        let finished = finishedSessions
+        return RestorePreview(
+            exerciseCount: exercises.count,
+            templateCount: templates.count,
+            sessionCount: finished.count,
+            firstSession: finished.last?.startedAt,
+            lastSession: finished.first?.startedAt,
+            hasActiveSession: activeSession != nil
+        )
+    }
+
+    /// Parses a backup file into a store ready to replace the current one.
+    /// Refuses anything that would leave the user with less than they had.
+    static func restore(from raw: Data, now: Date = Date()) throws -> AppData {
+        guard var decoded = try? decoder().decode(AppData.self, from: raw) else {
+            throw RestoreError.unreadable
+        }
+        guard !decoded.exercises.isEmpty || !decoded.sessions.isEmpty else {
+            throw RestoreError.empty
+        }
+        // A session id that points at nothing is a leftover, not state.
+        if decoded.activeSession == nil { decoded.activeSessionId = nil }
+        decoded.pruneExpiredTimer(at: now)
+        return decoded
     }
 }
