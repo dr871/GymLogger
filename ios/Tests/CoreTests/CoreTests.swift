@@ -556,6 +556,73 @@ final class SetCompletionTests: XCTestCase {
     }
 }
 
+/// A catalogue to build from, and the standard splits made out of it.
+final class ExerciseCatalogueTests: XCTestCase {
+
+    func testTheCatalogueCoversEveryMuscleGroup() {
+        for muscle in MuscleGroup.allCases {
+            XCTAssertFalse(ExerciseCatalogue.grouped(muscle).isEmpty, "\(muscle) has nothing in it")
+        }
+    }
+
+    func testCatalogueNamesAreUnique() {
+        let names = ExerciseCatalogue.all.map { $0.name.lowercased() }
+        XCTAssertEqual(names.count, Set(names).count)
+    }
+
+    /// The catalogue owns rest and bodyweight defaults, so a preset naming
+    /// something outside it would silently create a bare exercise.
+    func testEveryPresetItemExistsInTheCatalogue() {
+        for preset in WorkoutPreset.catalogue {
+            for item in preset.items {
+                XCTAssertNotNil(ExerciseCatalogue.entry(named: item.exerciseName),
+                                "\(preset.name) names \(item.exerciseName), which isn't in the catalogue")
+            }
+        }
+    }
+
+    /// Everything seeded on first launch must match the catalogue by name, or
+    /// adding a standard workout would duplicate the user's own exercises.
+    func testSeededExercisesAreAllInTheCatalogue() {
+        for exercise in AppData.seed().exercises {
+            XCTAssertNotNil(ExerciseCatalogue.entry(named: exercise.name), exercise.name)
+        }
+    }
+
+    func testAddingACatalogueExerciseCarriesItsDefaults() throws {
+        var data = AppData()
+
+        let id = data.addExercise(named: "Pull-up")
+
+        let created = try XCTUnwrap(data.exercises.first { $0.id == id })
+        XCTAssertEqual(created.name, "Pull-up")
+        XCTAssertTrue(created.isBodyweight)
+        XCTAssertEqual(created.restSec, 150)
+    }
+
+    func testAddingAnExerciseTwiceReusesTheFirst() {
+        var data = AppData.seed()
+        let before = data.exercises.count
+
+        let first = data.addExercise(named: "chest press")
+        let second = data.addExercise(named: "Chest press")
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(data.exercises.count, before, "matched by name, case-insensitively")
+    }
+
+    func testAnExerciseOutsideTheCatalogueIsStillCreated() throws {
+        var data = AppData()
+
+        let id = data.addExercise(named: "Sled push")
+
+        let created = try XCTUnwrap(data.exercises.first { $0.id == id })
+        XCTAssertEqual(created.name, "Sled push")
+        XCTAssertFalse(created.isBodyweight)
+        XCTAssertNil(created.restSec)
+    }
+}
+
 /// Standard workouts people expect to find, without hand-building them.
 final class PresetWorkoutTests: XCTestCase {
 
@@ -571,7 +638,7 @@ final class PresetWorkoutTests: XCTestCase {
         var data = AppData()
         let preset = WorkoutPreset.catalogue[0]
 
-        let id = data.addPreset(preset)
+        let id = try XCTUnwrap(data.addPreset(preset))
 
         let template = try XCTUnwrap(data.template(id: id))
         XCTAssertEqual(template.name, preset.name)
@@ -607,19 +674,36 @@ final class PresetWorkoutTests: XCTestCase {
         XCTAssertNotEqual(data.templates[0].name, data.templates[1].name)
     }
 
-    func testAPresetCarriesBodyweightAndRestOntoNewExercises() throws {
+    /// The whole point of the fix: one exercise out of six, not six minus five.
+    func testAPresetCanBringInJustTheChosenExercises() throws {
         var data = AppData()
-        let preset = WorkoutPreset(
-            name: "Bodyweight test",
-            summary: "",
-            items: [PresetItem(exerciseName: "Pull-up", sets: 3, target: 8, restSec: 150, bodyweight: true)]
-        )
+        let upper = try XCTUnwrap(WorkoutPreset.catalogue.first { $0.name == "Upper body" })
 
-        data.addPreset(preset)
+        let id = try XCTUnwrap(data.addPreset(upper, including: ["Shoulder press"]))
 
-        let created = try XCTUnwrap(data.exercises.first)
-        XCTAssertEqual(created.name, "Pull-up")
-        XCTAssertTrue(created.isBodyweight)
-        XCTAssertEqual(created.restSec, 150)
+        let template = try XCTUnwrap(data.template(id: id))
+        XCTAssertEqual(template.items.count, 1)
+        XCTAssertEqual(data.exercises.count, 1, "only the chosen exercise reaches the library")
+        XCTAssertEqual(data.exercises.first?.name, "Shoulder press")
+    }
+
+    func testChoosingNothingAddsNoWorkoutAtAll() {
+        var data = AppData()
+        let preset = WorkoutPreset.catalogue[0]
+
+        XCTAssertNil(data.addPreset(preset, including: []))
+        XCTAssertTrue(data.templates.isEmpty)
+        XCTAssertTrue(data.exercises.isEmpty)
+    }
+
+    func testAPresetKeepsTheSetsAndRepsOfTheChosenExercises() throws {
+        var data = AppData()
+        let push = try XCTUnwrap(WorkoutPreset.catalogue.first { $0.name == "Push" })
+
+        let id = try XCTUnwrap(data.addPreset(push, including: ["Lateral raise"]))
+
+        let template = try XCTUnwrap(data.template(id: id))
+        XCTAssertEqual(template.items.first?.sets, 3)
+        XCTAssertEqual(template.items.first?.target, 15)
     }
 }

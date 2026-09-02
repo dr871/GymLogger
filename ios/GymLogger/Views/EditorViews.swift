@@ -250,64 +250,81 @@ struct ExerciseEditorView: View {
     }
 }
 
+/// Adding one exercise at a time. The standard catalogue is browsable here so
+/// building a workout never means typing names by hand — or pulling in a whole
+/// preset just to get at one of its exercises.
 struct ExercisePickerView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
 
     let onPick: (String) -> Void
-    @State private var newName = ""
+    @State private var search = ""
+
+    private var query: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func matches(_ name: String) -> Bool {
+        query.isEmpty || name.localizedCaseInsensitiveContains(query)
+    }
+
+    /// What's already in the library, so it's never offered twice.
+    private var mine: [Exercise] {
+        store.data.orderedExercises.filter { matches($0.name) }
+    }
+
+    private func catalogue(_ muscle: MuscleGroup) -> [CatalogueExercise] {
+        ExerciseCatalogue.grouped(muscle).filter { entry in
+            matches(entry.name) && !store.data.exercises.contains {
+                $0.name.compare(entry.name, options: .caseInsensitive) == .orderedSame
+            }
+        }
+    }
+
+    /// Only worth offering once the search matches nothing already on offer.
+    private var canCreate: Bool {
+        guard !query.isEmpty else { return false }
+        return mine.isEmpty && MuscleGroup.allCases.allSatisfy { catalogue($0).isEmpty }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        TextField("New exercise name", text: $newName)
-                            .foregroundStyle(Palette.text)
-                            .padding(.horizontal, 12)
-                            .frame(minHeight: Metrics.tap)
-                            .background(Palette.surface2)
-                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    TextField("Search or name a new exercise", text: $search)
+                        .foregroundStyle(Palette.text)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: Metrics.tap)
+                        .background(Palette.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-                        Button("Create") {
-                            let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-                            guard !trimmed.isEmpty else { return }
-                            let exercise = Exercise(name: trimmed)
-                            store.data.exercises.append(exercise)
-                            onPick(exercise.id)
+                    if canCreate {
+                        Button("Create “\(query)”") {
+                            onPick(store.data.addExercise(named: query))
                         }
-                        .buttonStyle(ChipStyle())
+                        .buttonStyle(BigButtonStyle())
                     }
 
-                    SectionHeader(title: "Existing")
-
-                    ForEach(store.data.orderedExercises) { exercise in
-                        Button {
-                            onPick(exercise.id)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(exercise.name)
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundStyle(Palette.text)
-                                    Text(subtitle(for: exercise))
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Palette.muted)
-                                }
-                                Spacer()
-                                Image(systemName: "plus").foregroundStyle(Palette.ghost)
+                    if !mine.isEmpty {
+                        SectionHeader(title: "Your exercises")
+                        ForEach(mine) { exercise in
+                            row(name: exercise.name, detail: subtitle(for: exercise)) {
+                                onPick(exercise.id)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 13)
-                            .frame(minHeight: Metrics.tap)
-                            .background(Palette.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Palette.line, lineWidth: 1)
-                            )
                         }
-                        .buttonStyle(.plain)
+                    }
+
+                    ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                        let entries = catalogue(muscle)
+                        if !entries.isEmpty {
+                            SectionHeader(title: muscle.title)
+                            ForEach(entries) { entry in
+                                row(name: entry.name, detail: detail(for: entry)) {
+                                    onPick(store.data.addExercise(named: entry.name))
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 14)
@@ -319,14 +336,55 @@ struct ExercisePickerView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { hideKeyboard() }
+                        .font(.system(size: 17, weight: .semibold))
+                }
             }
             .screen()
         }
     }
 
+    private func row(name: String, detail: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                    Text(detail)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.muted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "plus").foregroundStyle(Palette.ghost)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .frame(minHeight: Metrics.tap)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Palette.line, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private func subtitle(for exercise: Exercise) -> String {
         var parts = ["rest \(store.data.restSec(for: exercise.id))s"]
+        if exercise.isBodyweight { parts.append("bodyweight") }
         if !exercise.notes.isEmpty { parts.append(exercise.notes) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func detail(for entry: CatalogueExercise) -> String {
+        var parts = ["rest \(entry.restSec ?? store.data.settings.defaultRestSec)s"]
+        if entry.bodyweight { parts.append("bodyweight") }
         return parts.joined(separator: " · ")
     }
 }

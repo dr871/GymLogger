@@ -1,17 +1,95 @@
 import Foundation
 
-// The standard splits people expect to already be there. Presets name their
-// exercises rather than carrying ids: adding one reuses whatever is already in
-// the library and only creates what's genuinely missing, so building "Push"
-// after "Upper body" doesn't leave two Chest presses behind.
+// A catalogue of standard exercises, and the standard splits built from them.
+// The catalogue is the single source of truth for an exercise's rest and
+// bodyweight defaults; presets only name what they want and how many sets.
+// Adding either reuses whatever is already in the library by name, so nothing
+// gets duplicated.
 
-struct PresetItem: Hashable {
+enum MuscleGroup: String, CaseIterable, Hashable {
+    case chest, back, shoulders, arms, legs, core
+
+    var title: String {
+        switch self {
+        case .chest: return "Chest"
+        case .back: return "Back"
+        case .shoulders: return "Shoulders"
+        case .arms: return "Arms"
+        case .legs: return "Legs"
+        case .core: return "Core"
+        }
+    }
+}
+
+struct CatalogueExercise: Identifiable, Hashable {
+    var id: String { name }
+    let name: String
+    let muscle: MuscleGroup
+    /// nil falls back to `Settings.defaultRestSec`.
+    var restSec: Int? = nil
+    var bodyweight: Bool = false
+}
+
+enum ExerciseCatalogue {
+    static let all: [CatalogueExercise] = [
+        // Chest
+        CatalogueExercise(name: "Chest press", muscle: .chest),
+        CatalogueExercise(name: "Incline chest press", muscle: .chest),
+        CatalogueExercise(name: "Chest fly", muscle: .chest),
+        CatalogueExercise(name: "Push-up", muscle: .chest, bodyweight: true),
+        CatalogueExercise(name: "Dip", muscle: .chest, restSec: 120, bodyweight: true),
+
+        // Back
+        CatalogueExercise(name: "Lat pulldown", muscle: .back),
+        CatalogueExercise(name: "Seated cable row", muscle: .back),
+        CatalogueExercise(name: "Bent-over row", muscle: .back, restSec: 120),
+        CatalogueExercise(name: "Face pull", muscle: .back),
+        CatalogueExercise(name: "Straight-arm pulldown", muscle: .back),
+        CatalogueExercise(name: "Pull-up", muscle: .back, restSec: 150, bodyweight: true),
+
+        // Shoulders
+        CatalogueExercise(name: "Shoulder press", muscle: .shoulders),
+        CatalogueExercise(name: "Lateral raise", muscle: .shoulders),
+        CatalogueExercise(name: "Rear delt fly", muscle: .shoulders),
+        CatalogueExercise(name: "Upright row", muscle: .shoulders),
+
+        // Arms
+        CatalogueExercise(name: "Bicep curl", muscle: .arms),
+        CatalogueExercise(name: "Hammer curl", muscle: .arms),
+        CatalogueExercise(name: "Triceps pushdown", muscle: .arms),
+        CatalogueExercise(name: "Overhead triceps extension", muscle: .arms),
+
+        // Legs
+        CatalogueExercise(name: "Leg press", muscle: .legs, restSec: 120),
+        CatalogueExercise(name: "Squat", muscle: .legs, restSec: 150),
+        CatalogueExercise(name: "Romanian deadlift", muscle: .legs, restSec: 120),
+        CatalogueExercise(name: "Leg extension", muscle: .legs),
+        CatalogueExercise(name: "Leg curl", muscle: .legs),
+        CatalogueExercise(name: "Hip thrust", muscle: .legs, restSec: 120),
+        CatalogueExercise(name: "Walking lunge", muscle: .legs, restSec: 120),
+        CatalogueExercise(name: "Calf raise", muscle: .legs),
+
+        // Core
+        CatalogueExercise(name: "Plank", muscle: .core, bodyweight: true),
+        CatalogueExercise(name: "Hanging leg raise", muscle: .core, bodyweight: true),
+        CatalogueExercise(name: "Cable crunch", muscle: .core),
+        CatalogueExercise(name: "Back extension", muscle: .core, bodyweight: true),
+    ]
+
+    static func entry(named name: String) -> CatalogueExercise? {
+        all.first { $0.name.compare(name, options: .caseInsensitive) == .orderedSame }
+    }
+
+    static func grouped(_ muscle: MuscleGroup) -> [CatalogueExercise] {
+        all.filter { $0.muscle == muscle }
+    }
+}
+
+struct PresetItem: Identifiable, Hashable {
+    var id: String { exerciseName }
     let exerciseName: String
     let sets: Int
     let target: Int?
-    /// nil falls back to `Settings.defaultRestSec` like any other exercise.
-    var restSec: Int? = nil
-    var bodyweight: Bool = false
 }
 
 struct WorkoutPreset: Identifiable, Hashable {
@@ -23,7 +101,6 @@ struct WorkoutPreset: Identifiable, Hashable {
 }
 
 extension WorkoutPreset {
-    /// Machine-and-cable led, matching the exercises already seeded on day one.
     static let catalogue: [WorkoutPreset] = [
         WorkoutPreset(
             name: "Push",
@@ -44,17 +121,17 @@ extension WorkoutPreset {
                 PresetItem(exerciseName: "Seated cable row", sets: 3, target: 10),
                 PresetItem(exerciseName: "Face pull", sets: 3, target: 15),
                 PresetItem(exerciseName: "Bicep curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Pull-up", sets: 3, target: 8, restSec: 150, bodyweight: true),
+                PresetItem(exerciseName: "Pull-up", sets: 3, target: 8),
             ]
         ),
         WorkoutPreset(
             name: "Legs",
             summary: "Quads, hamstrings and calves",
             items: [
-                PresetItem(exerciseName: "Leg press", sets: 4, target: 10, restSec: 120),
+                PresetItem(exerciseName: "Leg press", sets: 4, target: 10),
                 PresetItem(exerciseName: "Leg extension", sets: 3, target: 12),
                 PresetItem(exerciseName: "Leg curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Romanian deadlift", sets: 3, target: 10, restSec: 120),
+                PresetItem(exerciseName: "Romanian deadlift", sets: 3, target: 10),
                 PresetItem(exerciseName: "Calf raise", sets: 4, target: 15),
             ]
         ),
@@ -74,54 +151,60 @@ extension WorkoutPreset {
             name: "Lower body",
             summary: "Legs and core",
             items: [
-                PresetItem(exerciseName: "Leg press", sets: 4, target: 10, restSec: 120),
+                PresetItem(exerciseName: "Leg press", sets: 4, target: 10),
                 PresetItem(exerciseName: "Leg curl", sets: 3, target: 12),
                 PresetItem(exerciseName: "Leg extension", sets: 3, target: 12),
                 PresetItem(exerciseName: "Calf raise", sets: 3, target: 15),
-                PresetItem(exerciseName: "Plank", sets: 3, target: 40, bodyweight: true),
+                PresetItem(exerciseName: "Plank", sets: 3, target: 40),
             ]
         ),
         WorkoutPreset(
             name: "Full body",
             summary: "One session covering everything",
             items: [
-                PresetItem(exerciseName: "Leg press", sets: 3, target: 12, restSec: 120),
+                PresetItem(exerciseName: "Leg press", sets: 3, target: 12),
                 PresetItem(exerciseName: "Chest press", sets: 3, target: 12),
                 PresetItem(exerciseName: "Lat pulldown", sets: 3, target: 12),
                 PresetItem(exerciseName: "Seated cable row", sets: 3, target: 12),
                 PresetItem(exerciseName: "Leg curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Plank", sets: 3, target: 40, bodyweight: true),
+                PresetItem(exerciseName: "Plank", sets: 3, target: 40),
             ]
         ),
     ]
 }
 
 extension AppData {
-    /// Adds a preset as a new workout, creating only the exercises that aren't
-    /// already in the library. Returns the new template's id.
+    /// Returns the id of the exercise with this name, creating it from the
+    /// catalogue's defaults if the library doesn't have it yet. The one place
+    /// that decides "reuse or create", so nothing is ever duplicated.
     @discardableResult
-    mutating func addPreset(_ preset: WorkoutPreset) -> String {
-        var items: [TemplateItem] = []
+    mutating func addExercise(named name: String) -> String {
+        if let existing = exercises.first(where: {
+            $0.name.compare(name, options: .caseInsensitive) == .orderedSame
+        }) {
+            return existing.id
+        }
 
-        for item in preset.items {
-            let existing = exercises.first {
-                $0.name.compare(item.exerciseName, options: .caseInsensitive) == .orderedSame
-            }
+        let entry = ExerciseCatalogue.entry(named: name)
+        let created = Exercise(
+            name: entry?.name ?? name,
+            restSec: entry?.restSec,
+            isBodyweight: entry?.bodyweight ?? false
+        )
+        exercises.append(created)
+        return created.id
+    }
 
-            let exerciseId: String
-            if let existing {
-                exerciseId = existing.id
-            } else {
-                let created = Exercise(
-                    name: item.exerciseName,
-                    restSec: item.restSec,
-                    isBodyweight: item.bodyweight
-                )
-                exercises.append(created)
-                exerciseId = created.id
-            }
+    /// Adds a preset as a new workout. `including` picks which of its exercises
+    /// to bring in — wanting one exercise out of six shouldn't mean taking all
+    /// six and deleting five. Passing nil takes everything.
+    @discardableResult
+    mutating func addPreset(_ preset: WorkoutPreset, including chosen: Set<String>? = nil) -> String? {
+        let wanted = preset.items.filter { chosen?.contains($0.exerciseName) ?? true }
+        guard !wanted.isEmpty else { return nil }
 
-            items.append(TemplateItem(exerciseId: exerciseId, sets: item.sets, target: item.target))
+        let items = wanted.map {
+            TemplateItem(exerciseId: addExercise(named: $0.exerciseName), sets: $0.sets, target: $0.target)
         }
 
         let template = WorkoutTemplate(name: uniqueTemplateName(preset.name), items: items)
