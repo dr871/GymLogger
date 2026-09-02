@@ -11,13 +11,17 @@ struct Exercise: Codable, Identifiable, Hashable {
     var restSec: Int?
     /// nil falls back to `Settings.defaultIncrement`.
     var increment: Double?
+    /// Pull-ups, dips, planks: there is no weight to log, so sets are ticked
+    /// off on reps alone and the weight field is hidden.
+    var isBodyweight: Bool = false
 
-    init(id: String = newID("ex"), name: String, notes: String = "", restSec: Int? = nil, increment: Double? = nil) {
+    init(id: String = newID("ex"), name: String, notes: String = "", restSec: Int? = nil, increment: Double? = nil, isBodyweight: Bool = false) {
         self.id = id
         self.name = name
         self.notes = notes
         self.restSec = restSec
         self.increment = increment
+        self.isBodyweight = isBodyweight
     }
 }
 
@@ -51,10 +55,23 @@ struct SessionEntry: Codable, Hashable, Identifiable {
     var sets: [SetEntry] = []
     /// True when this entry opened with an increase suggested.
     var suggested: Bool = false
+    /// Snapshotted alongside `name` and `target`, so flipping the exercise's
+    /// flag — or deleting it — can't retroactively invalidate a logged session.
+    var bodyweight: Bool = false
 
     var doneSets: [SetEntry] { sets.filter(\.done) }
     var isComplete: Bool { !sets.isEmpty && doneSets.count == sets.count }
     var hasWork: Bool { !doneSets.isEmpty }
+
+    /// Ticking a set is a claim that it happened, so it has to carry what was
+    /// lifted. Bodyweight work is the exception: reps are the whole record.
+    func canComplete(setIndex: Int) -> Bool {
+        guard sets.indices.contains(setIndex) else { return false }
+        let set = sets[setIndex]
+        guard let reps = set.reps, reps > 0 else { return false }
+        if bodyweight { return true }
+        return (set.weight ?? 0) > 0
+    }
 }
 
 struct Session: Codable, Identifiable, Hashable {
@@ -128,7 +145,7 @@ extension AppData {
         let latPulldown = Exercise(name: "Lat pulldown")
         let cableRow = Exercise(name: "Seated cable row")
         let legCurl = Exercise(name: "Leg curl")
-        let plank = Exercise(name: "Plank")
+        let plank = Exercise(name: "Plank", isBodyweight: true)
 
         let exercises = [legPress, chestPress, latPulldown, cableRow, legCurl, plank]
 

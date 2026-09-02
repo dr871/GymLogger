@@ -124,6 +124,11 @@ final class Store: ObservableObject {
               data.sessions[s].entries[entryIndex].sets.indices.contains(setIndex) else { return }
 
         let nowDone = !data.sessions[s].entries[entryIndex].sets[setIndex].done
+
+        // Ticking needs a fully logged set; unticking is always allowed, so a
+        // set can never end up stuck done because its numbers were cleared.
+        if nowDone, !data.sessions[s].entries[entryIndex].canComplete(setIndex: setIndex) { return }
+
         data.sessions[s].entries[entryIndex].sets[setIndex].done = nowDone
 
         if nowDone {

@@ -22,7 +22,7 @@ struct HomeView: View {
                         }
                         .buttonStyle(BigButtonStyle(primary: true))
                     } else if store.data.templates.isEmpty {
-                        EmptyHint(text: "No workout templates yet. Create one in Settings.")
+                        EmptyHint(text: "No workouts yet. Add a standard one, or build your own.")
                     } else {
                         ForEach(store.data.templates) { template in
                             Button {
@@ -39,6 +39,18 @@ struct HomeView: View {
                             }
                             .buttonStyle(BigButtonStyle(primary: template.id == store.data.templates.first?.id))
                         }
+                    }
+
+                    if store.activeSession == nil {
+                        NavigationLink {
+                            WorkoutsView()
+                        } label: {
+                            WorkoutRow(
+                                name: store.data.templates.isEmpty ? "Add a workout" : "Workouts",
+                                detail: "Design a workout, or add or remove exercises"
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
 
                     SectionHeader(title: "Recent sessions")

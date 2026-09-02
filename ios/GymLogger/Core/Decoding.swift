@@ -26,7 +26,7 @@ extension Settings {
 }
 
 extension Exercise {
-    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment }
+    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment, isBodyweight }
 }
 
 extension TemplateItem {
@@ -42,7 +42,7 @@ extension SetEntry {
 }
 
 extension SessionEntry {
-    enum CodingKeys: String, CodingKey { case id, exerciseId, name, target, note, sets, suggested }
+    enum CodingKeys: String, CodingKey { case id, exerciseId, name, target, note, sets, suggested, bodyweight }
 }
 
 extension Session {
@@ -78,7 +78,8 @@ extension Exercise {
             name: c.or(.name, "Exercise"),
             notes: c.or(.notes, ""),
             restSec: c.maybe(.restSec),
-            increment: c.maybe(.increment)
+            increment: c.maybe(.increment),
+            isBodyweight: c.or(.isBodyweight, false)
         )
     }
 }
@@ -127,7 +128,8 @@ extension SessionEntry {
             target: c.maybe(.target),
             note: c.or(.note, ""),
             sets: c.or(.sets, []),
-            suggested: c.or(.suggested, false)
+            suggested: c.or(.suggested, false),
+            bodyweight: c.or(.bodyweight, false)
         )
     }
 }

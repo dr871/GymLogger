@@ -111,7 +111,8 @@ extension AppData {
             target: target,
             note: exercise(id: exerciseId)?.notes ?? "",
             sets: sets,
-            suggested: suggestion.earned
+            suggested: suggestion.earned,
+            bodyweight: exercise(id: exerciseId)?.isBodyweight ?? false
         )
     }
 

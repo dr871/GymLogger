@@ -277,19 +277,47 @@ struct ExerciseCardView: View {
                         .minimumScaleFactor(0.75)
                         .frame(minWidth: 92, alignment: .leading)
 
-                    WeightField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].weight)
+                    // Nothing to log for pull-ups or a plank, so no empty box.
+                    if !entry.bodyweight {
+                        WeightField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].weight)
+                    }
 
                     RepsField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps)
                         .frame(maxWidth: 72)
 
-                    TickButton(done: set.done) {
+                    TickButton(done: set.done, enabled: set.done || entry.canComplete(setIndex: setIndex)) {
                         store.toggleSet(entryIndex: entryIndex, setIndex: setIndex)
                     }
                 }
                 .opacity(set.done ? 0.75 : 1)
             }
+
+            if let blocked = blockedReason {
+                Text(blocked)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 2)
+            }
         }
         .padding(.top, 10)
+    }
+
+    /// Shown only while something is actually blocked, so a disabled tick never
+    /// looks like a dead control.
+    private var blockedReason: String? {
+        let pending = entry.sets.indices.filter { !entry.sets[$0].done }
+        guard pending.contains(where: { !entry.canComplete(setIndex: $0) }) else { return nil }
+
+        let needsReps = pending.contains { ($0 < entry.sets.count) && (entry.sets[$0].reps ?? 0) <= 0 }
+        if entry.bodyweight { return "Enter reps to tick a set off." }
+        let needsWeight = pending.contains { (entry.sets[$0].weight ?? 0) <= 0 }
+
+        switch (needsWeight, needsReps) {
+        case (true, true): return "Enter a weight and reps to tick a set off."
+        case (true, false): return "Enter a weight to tick a set off."
+        default: return "Enter reps to tick a set off."
+        }
     }
 
     private var footer: some View {
@@ -311,6 +339,7 @@ struct ExerciseCardView: View {
 
 struct TickButton: View {
     let done: Bool
+    var enabled: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -334,9 +363,12 @@ struct TickButton: View {
                 }
             }
             .frame(width: Metrics.tap, height: Metrics.tap)
+            .opacity(enabled ? 1 : 0.4)
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
         .accessibilityLabel(done ? "Mark set not done" : "Mark set done and start rest")
+        .accessibilityHint(enabled ? "" : "Enter this set's numbers first")
     }
 }
 

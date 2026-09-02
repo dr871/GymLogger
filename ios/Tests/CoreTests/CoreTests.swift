@@ -487,3 +487,139 @@ final class LibraryAndRestoreTests: XCTestCase {
         XCTAssertNotNil(data.timer)
     }
 }
+
+/// Ticking a set off is a claim that the set happened, so it has to carry what
+/// was actually lifted. Bodyweight work is the deliberate exception.
+final class SetCompletionTests: XCTestCase {
+
+    private func entry(weight: Double?, reps: Int?, bodyweight: Bool) -> SessionEntry {
+        SessionEntry(
+            exerciseId: "ex_1",
+            name: "Chest press",
+            target: 12,
+            sets: [SetEntry(weight: weight, reps: reps)],
+            bodyweight: bodyweight
+        )
+    }
+
+    func testALoadedSetNeedsAWeight() {
+        XCTAssertFalse(entry(weight: nil, reps: 12, bodyweight: false).canComplete(setIndex: 0))
+    }
+
+    func testALoadedSetNeedsReps() {
+        XCTAssertFalse(entry(weight: 60, reps: nil, bodyweight: false).canComplete(setIndex: 0))
+    }
+
+    func testZeroIsNotAWeight() {
+        XCTAssertFalse(entry(weight: 0, reps: 12, bodyweight: false).canComplete(setIndex: 0))
+    }
+
+    func testZeroIsNotARepCount() {
+        XCTAssertFalse(entry(weight: 60, reps: 0, bodyweight: false).canComplete(setIndex: 0))
+    }
+
+    func testAFullyLoggedSetCanBeTicked() {
+        XCTAssertTrue(entry(weight: 60, reps: 12, bodyweight: false).canComplete(setIndex: 0))
+    }
+
+    func testBodyweightWorkNeedsOnlyReps() {
+        XCTAssertTrue(entry(weight: nil, reps: 8, bodyweight: true).canComplete(setIndex: 0))
+    }
+
+    func testBodyweightWorkStillNeedsReps() {
+        XCTAssertFalse(entry(weight: nil, reps: nil, bodyweight: true).canComplete(setIndex: 0))
+    }
+
+    func testAnOutOfRangeSetIsNeverCompletable() {
+        XCTAssertFalse(entry(weight: 60, reps: 12, bodyweight: false).canComplete(setIndex: 5))
+    }
+
+    /// The flag is snapshotted like `name` and `target`, so flipping or deleting
+    /// the exercise later can't retroactively invalidate a logged session.
+    func testTheEntrySnapshotsTheExercisesBodyweightFlag() {
+        var data = AppData.seed()
+        let pullUp = Exercise(name: "Pull-up", isBodyweight: true)
+        data.exercises.append(pullUp)
+
+        let entry = data.buildEntry(exerciseId: pullUp.id, sets: 3, target: 8)
+        XCTAssertTrue(entry.bodyweight)
+
+        data.deleteExercise(id: pullUp.id)
+        XCTAssertTrue(entry.bodyweight, "a logged entry keeps its own copy")
+    }
+
+    func testAnOlderBackupDecodesAsNotBodyweight() throws {
+        let json = #"{"id":"ex_1","name":"Chest press","notes":""}"#
+        let exercise = try JSONDecoder().decode(Exercise.self, from: Data(json.utf8))
+        XCTAssertEqual(exercise.name, "Chest press")
+        XCTAssertFalse(exercise.isBodyweight)
+    }
+}
+
+/// Standard workouts people expect to find, without hand-building them.
+final class PresetWorkoutTests: XCTestCase {
+
+    func testEveryPresetIsNonEmptyAndNamed() {
+        XCTAssertFalse(WorkoutPreset.catalogue.isEmpty)
+        for preset in WorkoutPreset.catalogue {
+            XCTAssertFalse(preset.name.isEmpty)
+            XCTAssertFalse(preset.items.isEmpty, "\(preset.name) has no exercises")
+        }
+    }
+
+    func testAddingAPresetCreatesTheWorkoutAndItsMissingExercises() throws {
+        var data = AppData()
+        let preset = WorkoutPreset.catalogue[0]
+
+        let id = data.addPreset(preset)
+
+        let template = try XCTUnwrap(data.template(id: id))
+        XCTAssertEqual(template.name, preset.name)
+        XCTAssertEqual(template.items.count, preset.items.count)
+        XCTAssertEqual(data.exercises.count, preset.items.count)
+    }
+
+    /// Adding "Push" after "Upper body" must not create a second Chest press.
+    func testAPresetReusesExercisesAlreadyInTheLibrary() {
+        var data = AppData.seed()
+        let before = data.exercises.count
+        let preset = WorkoutPreset(
+            name: "Reuse test",
+            summary: "",
+            items: [PresetItem(exerciseName: "chest press", sets: 3, target: 10)]
+        )
+
+        data.addPreset(preset)
+
+        XCTAssertEqual(data.exercises.count, before, "matched an existing exercise by name")
+        XCTAssertEqual(data.templates.last?.items.first?.exerciseId,
+                       data.exercises.first { $0.name == "Chest press" }?.id)
+    }
+
+    func testAddingTheSamePresetTwiceDoesNotCollideOnName() {
+        var data = AppData()
+        let preset = WorkoutPreset.catalogue[0]
+
+        data.addPreset(preset)
+        data.addPreset(preset)
+
+        XCTAssertEqual(data.templates.count, 2)
+        XCTAssertNotEqual(data.templates[0].name, data.templates[1].name)
+    }
+
+    func testAPresetCarriesBodyweightAndRestOntoNewExercises() throws {
+        var data = AppData()
+        let preset = WorkoutPreset(
+            name: "Bodyweight test",
+            summary: "",
+            items: [PresetItem(exerciseName: "Pull-up", sets: 3, target: 8, restSec: 150, bodyweight: true)]
+        )
+
+        data.addPreset(preset)
+
+        let created = try XCTUnwrap(data.exercises.first)
+        XCTAssertEqual(created.name, "Pull-up")
+        XCTAssertTrue(created.isBodyweight)
+        XCTAssertEqual(created.restSec, 150)
+    }
+}

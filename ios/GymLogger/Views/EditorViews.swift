@@ -186,14 +186,26 @@ struct ExerciseEditorView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
 
+                        LabeledField(label: "Bodyweight") {
+                            Toggle("", isOn: $store.data.exercises[index].isBodyweight)
+                                .labelsHidden()
+                                .tint(Palette.accent)
+                        }
+
+                        Text("Pull-ups, dips, planks. Sets are ticked off on reps alone and the weight box is hidden.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+
                         LabeledField(label: "Rest timer (sec)") {
                             RepsField(value: $store.data.exercises[index].restSec,
                                       placeholder: "\(store.data.settings.defaultRestSec)")
                         }
 
-                        LabeledField(label: "Increase step (kg)") {
-                            WeightField(value: $store.data.exercises[index].increment,
-                                        placeholder: Format.weight(store.data.settings.defaultIncrement))
+                        if !store.data.exercises[index].isBodyweight {
+                            LabeledField(label: "Increase step (kg)") {
+                                WeightField(value: $store.data.exercises[index].increment,
+                                            placeholder: Format.weight(store.data.settings.defaultIncrement))
+                            }
                         }
 
                         Text("Leave blank to use the defaults from Settings.")

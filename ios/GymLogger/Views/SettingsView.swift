@@ -17,40 +17,15 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     SectionHeader(title: "Workouts")
 
-                    ForEach(store.data.templates) { template in
-                        NavigationLink {
-                            TemplateEditorView(templateId: template.id)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(template.name)
-                                        .font(.system(size: 17, weight: .semibold))
-                                        .foregroundStyle(Palette.text)
-                                    Text("\(template.items.count) exercises")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Palette.muted)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").foregroundStyle(Palette.ghost)
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 13)
-                            .frame(minHeight: Metrics.tap)
-                            .background(Palette.surface)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Palette.line, lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
+                    NavigationLink {
+                        WorkoutsView()
+                    } label: {
+                        WorkoutRow(
+                            name: "Workouts",
+                            detail: "\(store.data.templates.count) workout\(store.data.templates.count == 1 ? "" : "s") · design and edit"
+                        )
                     }
-
-                    Button("+ New workout") {
-                        let template = WorkoutTemplate(name: "New workout", items: [])
-                        store.data.templates.append(template)
-                    }
-                    .buttonStyle(BigButtonStyle())
+                    .buttonStyle(.plain)
 
                     SectionHeader(title: "Defaults")
 
