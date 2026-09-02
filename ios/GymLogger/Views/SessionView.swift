@@ -233,8 +233,7 @@ struct ExerciseCardView: View {
 
     /// Built as a single Text so the sentence wraps as one paragraph.
     private func suggestionText(_ suggestion: Suggestion) -> Text {
-        Text("Hit every rep last time — try ")
-            + Text("\(Format.weight(suggestion.weight)) kg").bold()
+        Text("Hit every rep last time — try \(Text("\(Format.weight(suggestion.weight)) kg").bold())")
     }
 
     private var suggestionBanner: some View {
