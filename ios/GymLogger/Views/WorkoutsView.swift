@@ -173,7 +173,7 @@ struct PresetDetailView: View {
                                 Text(item.exerciseName)
                                     .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(Palette.text)
-                                Text("\(item.sets) × \(item.target.map(String.init) ?? "—")\(store.data.exercises.contains { $0.name.compare(item.exerciseName, options: .caseInsensitive) == .orderedSame } ? " · already in your library" : "")")
+                                Text("\(item.sets) × \(item.targetText)\(store.data.exercises.contains { $0.name.compare(item.exerciseName, options: .caseInsensitive) == .orderedSame } ? " · already in your library" : "")")
                                     .font(.system(size: 14))
                                     .foregroundStyle(Palette.muted)
                                     .lineLimit(1)

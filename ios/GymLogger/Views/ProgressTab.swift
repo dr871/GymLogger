@@ -23,17 +23,13 @@ struct ProgressTab: View {
 
                         if let exercise = chosen {
                             let series = store.data.progressSeries(for: exercise.id)
-                            // Weight is the point of the chart, but bodyweight
-                            // work never has one — fall back to reps so the
-                            // screen still says something useful.
-                            let usesWeight = series.contains { $0.topWeight != nil }
 
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("\(exercise.name) — top set (\(usesWeight ? "kg" : "reps"))")
+                                Text(chartTitle(exercise))
                                     .font(.system(size: 14))
                                     .foregroundStyle(Palette.muted)
 
-                                chart(series: series, usesWeight: usesWeight)
+                                chart(series: series)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .card()
@@ -82,11 +78,17 @@ struct ProgressTab: View {
         }
     }
 
+    /// "Plank — best set (s)", or for assisted work a reminder that the line
+    /// should be heading down.
+    private func chartTitle(_ exercise: Exercise) -> String {
+        let base = "\(exercise.name) — best set (\(exercise.measure.unit))"
+        return exercise.measure.lowerIsBetter ? base + " · lower is better" : base
+    }
+
     @ViewBuilder
-    private func chart(series: [ProgressPoint], usesWeight: Bool) -> some View {
+    private func chart(series: [ProgressPoint]) -> some View {
         let points = series.compactMap { point -> (Date, Double)? in
-            let value = usesWeight ? point.topWeight : point.topReps.map(Double.init)
-            return value.map { (point.date, $0) }
+            point.value.map { (point.date, $0) }
         }
 
         if points.isEmpty {
@@ -124,8 +126,18 @@ struct ProgressTab: View {
 
     private func rowSubtitle(_ point: ProgressPoint) -> String {
         var parts: [String] = []
-        parts.append(point.topWeight.map { "\(Format.weight($0)) kg" } ?? "bodyweight")
-        if let reps = point.topReps { parts.append("\(reps) reps") }
+        switch point.measure {
+        case .weight:
+            parts.append(point.topWeight.map { "\(Format.weight($0)) kg" } ?? "—")
+            if let reps = point.topReps { parts.append("\(reps) reps") }
+        case .assisted:
+            parts.append(point.topWeight.map { "\(Format.weight($0)) kg assistance" } ?? "—")
+            if let reps = point.topReps { parts.append("\(reps) reps") }
+        case .bodyweight:
+            parts.append(point.topReps.map { "\($0) reps" } ?? "—")
+        case .time:
+            parts.append(point.topReps.map { "\($0)s" } ?? "—")
+        }
         parts.append("\(point.setCount) sets")
         return parts.joined(separator: " · ")
     }

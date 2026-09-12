@@ -26,11 +26,15 @@ extension Settings {
 }
 
 extension Exercise {
-    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment, isBodyweight }
+    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment, measure }
+    /// Read-only: how older files said it.
+    enum LegacyKeys: String, CodingKey { case isBodyweight }
 }
 
 extension TemplateItem {
-    enum CodingKeys: String, CodingKey { case exerciseId, sets, target }
+    enum CodingKeys: String, CodingKey { case exerciseId, sets, targetMin, targetMax }
+    /// Read-only: a single target from before ranges.
+    enum LegacyKeys: String, CodingKey { case target }
 }
 
 extension WorkoutTemplate {
@@ -42,7 +46,8 @@ extension SetEntry {
 }
 
 extension SessionEntry {
-    enum CodingKeys: String, CodingKey { case id, exerciseId, name, target, note, sets, suggested, bodyweight }
+    enum CodingKeys: String, CodingKey { case id, exerciseId, name, targetMin, targetMax, note, sets, suggested, measure }
+    enum LegacyKeys: String, CodingKey { case target, bodyweight }
 }
 
 extension Session {
@@ -73,13 +78,15 @@ extension Settings {
 extension Exercise {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
         self.init(
             id: c.or(.id, newID("ex")),
             name: c.or(.name, "Exercise"),
             notes: c.or(.notes, ""),
             restSec: c.maybe(.restSec),
             increment: c.maybe(.increment),
-            isBodyweight: c.or(.isBodyweight, false)
+            measure: c.maybe(.measure)
+                ?? (legacy.or(.isBodyweight, false) ? .bodyweight : .weight)
         )
     }
 }
@@ -87,10 +94,14 @@ extension Exercise {
 extension TemplateItem {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+        // A file from before ranges has one number; it becomes both ends.
+        let old: Int? = legacy.maybe(.target)
         self.init(
             exerciseId: c.or(.exerciseId, ""),
             sets: c.or(.sets, 3),
-            target: c.maybe(.target)
+            targetMin: c.maybe(.targetMin) ?? old,
+            targetMax: c.maybe(.targetMax) ?? old
         )
     }
 }
@@ -121,15 +132,19 @@ extension SetEntry {
 extension SessionEntry {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyKeys.self)
+        let old: Int? = legacy.maybe(.target)
         self.init(
             id: c.or(.id, newID("en")),
             exerciseId: c.or(.exerciseId, ""),
             name: c.or(.name, "Exercise"),
-            target: c.maybe(.target),
+            targetMin: c.maybe(.targetMin) ?? old,
+            targetMax: c.maybe(.targetMax) ?? old,
             note: c.or(.note, ""),
             sets: c.or(.sets, []),
             suggested: c.or(.suggested, false),
-            bodyweight: c.or(.bodyweight, false)
+            measure: c.maybe(.measure)
+                ?? (legacy.or(.bodyweight, false) ? .bodyweight : .weight)
         )
     }
 }

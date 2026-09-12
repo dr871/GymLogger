@@ -18,7 +18,7 @@ final class CoreTests: XCTestCase {
         var entries: [SessionEntry] = []
         for item in template.items {
             guard let hit = work.first(where: { $0.exerciseId == item.exerciseId }) else { continue }
-            var entry = data.buildEntry(exerciseId: item.exerciseId, sets: item.sets, target: item.target)
+            var entry = data.buildEntry(exerciseId: item.exerciseId, sets: item.sets, targetMin: item.targetMin, targetMax: item.targetMax)
             for i in entry.sets.indices {
                 entry.sets[i].weight = hit.weight
                 entry.sets[i].reps = hit.reps
@@ -50,7 +50,9 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(data.templates.count, 1)
         XCTAssertEqual(data.templates[0].name, "Full Body")
         XCTAssertEqual(data.templates[0].items.map(\.sets), [3, 3, 3, 3, 3, 3])
-        XCTAssertEqual(data.templates[0].items.map(\.target), [12, 12, 12, 12, 12, 40])
+        XCTAssertEqual(data.templates[0].items.map(\.targetMin), [12, 12, 12, 12, 12, 30])
+        XCTAssertEqual(data.templates[0].items.map(\.targetMax), [12, 12, 12, 12, 12, 60])
+        XCTAssertEqual(data.exercises.map(\.measure), [.weight, .weight, .weight, .weight, .weight, .time])
     }
 
     func testLegPressRestsLongerThanTheRest() {
@@ -115,14 +117,15 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(data.suggestion(for: legPress).weight, 62.5)
     }
 
-    func testBodyweightWorkGetsNoWeightSuggestion() {
+    func testTimedWorkProgressesInSecondsNotWeight() {
         var (data, ids) = seeded()
         let plank = ids["Plank"]!
         logSession(&data, daysAgo: 2, [(plank, nil, 40, 3)])
 
         let suggestion = data.suggestion(for: plank)
-        XCTAssertFalse(suggestion.earned, "nothing to bump when no weight was logged")
-        XCTAssertNil(suggestion.weight)
+        XCTAssertTrue(suggestion.earned, "every set held 40s, so ask for more")
+        XCTAssertNil(suggestion.weight, "there is no weight to bump")
+        XCTAssertEqual(suggestion.reps, 45, "+5s inside the 30–60s range")
     }
 
     func testPerExerciseIncrementOverridesTheDefault() {
@@ -489,70 +492,80 @@ final class LibraryAndRestoreTests: XCTestCase {
 }
 
 /// Ticking a set off is a claim that the set happened, so it has to carry what
-/// was actually lifted. Bodyweight work is the deliberate exception.
+/// was actually done — and what that means depends on how the exercise is
+/// measured.
 final class SetCompletionTests: XCTestCase {
 
-    private func entry(weight: Double?, reps: Int?, bodyweight: Bool) -> SessionEntry {
+    private func entry(weight: Double?, reps: Int?, measure: Measure) -> SessionEntry {
         SessionEntry(
             exerciseId: "ex_1",
             name: "Chest press",
-            target: 12,
+            targetMin: 8,
+            targetMax: 12,
             sets: [SetEntry(weight: weight, reps: reps)],
-            bodyweight: bodyweight
+            measure: measure
         )
     }
 
-    func testALoadedSetNeedsAWeight() {
-        XCTAssertFalse(entry(weight: nil, reps: 12, bodyweight: false).canComplete(setIndex: 0))
+    private func canComplete(_ weight: Double?, _ reps: Int?, _ measure: Measure) -> Bool {
+        entry(weight: weight, reps: reps, measure: measure).canComplete(setIndex: 0)
     }
 
-    func testALoadedSetNeedsReps() {
-        XCTAssertFalse(entry(weight: 60, reps: nil, bodyweight: false).canComplete(setIndex: 0))
+    // Weight: both numbers, both above zero.
+    func testWeightedNeedsAWeightAndReps() {
+        XCTAssertTrue(canComplete(60, 12, .weight))
+        XCTAssertFalse(canComplete(nil, 12, .weight))
+        XCTAssertFalse(canComplete(60, nil, .weight))
+        XCTAssertFalse(canComplete(0, 12, .weight), "zero is not a weight")
+        XCTAssertFalse(canComplete(60, 0, .weight), "zero is not a rep count")
     }
 
-    func testZeroIsNotAWeight() {
-        XCTAssertFalse(entry(weight: 0, reps: 12, bodyweight: false).canComplete(setIndex: 0))
+    // Assisted: the assistance must be entered, and zero means unassisted.
+    func testAssistedNeedsRepsAndAnEnteredAssistance() {
+        XCTAssertTrue(canComplete(20, 8, .assisted))
+        XCTAssertTrue(canComplete(0, 8, .assisted), "0 kg assistance is a real, unassisted rep")
+        XCTAssertFalse(canComplete(nil, 8, .assisted), "the assistance has to be entered, even if it's 0")
+        XCTAssertFalse(canComplete(-5, 8, .assisted))
+        XCTAssertFalse(canComplete(20, 0, .assisted))
     }
 
-    func testZeroIsNotARepCount() {
-        XCTAssertFalse(entry(weight: 60, reps: 0, bodyweight: false).canComplete(setIndex: 0))
+    // Bodyweight: reps are the whole record.
+    func testBodyweightNeedsOnlyReps() {
+        XCTAssertTrue(canComplete(nil, 8, .bodyweight))
+        XCTAssertFalse(canComplete(nil, nil, .bodyweight))
+        XCTAssertFalse(canComplete(nil, 0, .bodyweight))
     }
 
-    func testAFullyLoggedSetCanBeTicked() {
-        XCTAssertTrue(entry(weight: 60, reps: 12, bodyweight: false).canComplete(setIndex: 0))
-    }
-
-    func testBodyweightWorkNeedsOnlyReps() {
-        XCTAssertTrue(entry(weight: nil, reps: 8, bodyweight: true).canComplete(setIndex: 0))
-    }
-
-    func testBodyweightWorkStillNeedsReps() {
-        XCTAssertFalse(entry(weight: nil, reps: nil, bodyweight: true).canComplete(setIndex: 0))
+    // Time: seconds live in `reps`.
+    func testTimedNeedsOnlySeconds() {
+        XCTAssertTrue(canComplete(nil, 40, .time))
+        XCTAssertFalse(canComplete(nil, nil, .time))
+        XCTAssertFalse(canComplete(nil, 0, .time))
     }
 
     func testAnOutOfRangeSetIsNeverCompletable() {
-        XCTAssertFalse(entry(weight: 60, reps: 12, bodyweight: false).canComplete(setIndex: 5))
+        XCTAssertFalse(entry(weight: 60, reps: 12, measure: .weight).canComplete(setIndex: 5))
     }
 
     /// The flag is snapshotted like `name` and `target`, so flipping or deleting
     /// the exercise later can't retroactively invalidate a logged session.
-    func testTheEntrySnapshotsTheExercisesBodyweightFlag() {
+    func testTheEntrySnapshotsTheExercisesMeasure() {
         var data = AppData.seed()
-        let pullUp = Exercise(name: "Pull-up", isBodyweight: true)
+        let pullUp = Exercise(name: "Pull-up", measure: .bodyweight)
         data.exercises.append(pullUp)
 
         let entry = data.buildEntry(exerciseId: pullUp.id, sets: 3, target: 8)
-        XCTAssertTrue(entry.bodyweight)
+        XCTAssertEqual(entry.measure, .bodyweight)
 
         data.deleteExercise(id: pullUp.id)
-        XCTAssertTrue(entry.bodyweight, "a logged entry keeps its own copy")
+        XCTAssertEqual(entry.measure, .bodyweight, "a logged entry keeps its own copy")
     }
 
-    func testAnOlderBackupDecodesAsNotBodyweight() throws {
+    func testAnOlderBackupDecodesAsWeighted() throws {
         let json = #"{"id":"ex_1","name":"Chest press","notes":""}"#
         let exercise = try JSONDecoder().decode(Exercise.self, from: Data(json.utf8))
         XCTAssertEqual(exercise.name, "Chest press")
-        XCTAssertFalse(exercise.isBodyweight)
+        XCTAssertEqual(exercise.measure, .weight)
     }
 }
 
@@ -596,8 +609,16 @@ final class ExerciseCatalogueTests: XCTestCase {
 
         let created = try XCTUnwrap(data.exercises.first { $0.id == id })
         XCTAssertEqual(created.name, "Pull-up")
-        XCTAssertTrue(created.isBodyweight)
+        XCTAssertEqual(created.measure, .bodyweight)
         XCTAssertEqual(created.restSec, 150)
+    }
+
+    func testTheCatalogueKnowsHowEachExerciseIsMeasured() {
+        XCTAssertEqual(ExerciseCatalogue.entry(named: "Plank")?.measure, .time)
+        XCTAssertEqual(ExerciseCatalogue.entry(named: "Assisted pull-up")?.measure, .assisted)
+        XCTAssertEqual(ExerciseCatalogue.entry(named: "Assisted dip")?.measure, .assisted)
+        XCTAssertEqual(ExerciseCatalogue.entry(named: "Pull-up")?.measure, .bodyweight)
+        XCTAssertEqual(ExerciseCatalogue.entry(named: "Chest press")?.measure, .weight)
     }
 
     func testAddingAnExerciseTwiceReusesTheFirst() {
@@ -618,7 +639,7 @@ final class ExerciseCatalogueTests: XCTestCase {
 
         let created = try XCTUnwrap(data.exercises.first { $0.id == id })
         XCTAssertEqual(created.name, "Sled push")
-        XCTAssertFalse(created.isBodyweight)
+        XCTAssertEqual(created.measure, .weight)
         XCTAssertNil(created.restSec)
     }
 }
@@ -653,7 +674,7 @@ final class PresetWorkoutTests: XCTestCase {
         let preset = WorkoutPreset(
             name: "Reuse test",
             summary: "",
-            items: [PresetItem(exerciseName: "chest press", sets: 3, target: 10)]
+            items: [PresetItem(exerciseName: "chest press", sets: 3, range: 10...10)]
         )
 
         data.addPreset(preset)
@@ -704,6 +725,323 @@ final class PresetWorkoutTests: XCTestCase {
 
         let template = try XCTUnwrap(data.template(id: id))
         XCTAssertEqual(template.items.first?.sets, 3)
-        XCTAssertEqual(template.items.first?.target, 15)
+        XCTAssertEqual(template.items.first?.targetMin, 12)
+        XCTAssertEqual(template.items.first?.targetMax, 15)
+    }
+
+    func testEveryPresetItemHasASaneRange() {
+        for preset in WorkoutPreset.catalogue {
+            for item in preset.items {
+                let lo = try? XCTUnwrap(item.targetMin, "\(item.exerciseName) has no lower target")
+                let hi = try? XCTUnwrap(item.targetMax, "\(item.exerciseName) has no upper target")
+                if let lo, let hi { XCTAssertLessThanOrEqual(lo, hi, item.exerciseName) }
+            }
+        }
+        let plank = WorkoutPreset.catalogue.flatMap(\.items).first { $0.exerciseName == "Plank" }
+        XCTAssertEqual(plank?.targetMin, 30)
+        XCTAssertEqual(plank?.targetMax, 60)
+    }
+}
+
+
+/// Double progression: climb the rep range at a weight, then move the weight
+/// and drop back to the bottom of the range. Each measure moves differently.
+final class DoubleProgressionTests: XCTestCase {
+
+    /// One exercise, one template with the given range, one finished session
+    /// with the given per-set numbers. Returns the exercise id.
+    private func history(measure: Measure, range: (Int, Int), increment: Double = 2.5,
+                         sets: [(weight: Double?, reps: Int)], into data: inout AppData) -> String {
+        let exercise = Exercise(name: "X", increment: increment, measure: measure)
+        data.exercises = [exercise]
+        data.templates = [WorkoutTemplate(name: "T", items: [
+            TemplateItem(exerciseId: exercise.id, sets: sets.count, targetMin: range.0, targetMax: range.1)
+        ])]
+        data.startSession(templateId: data.templates[0].id)
+        let i = data.activeSessionIndex!
+        for (n, set) in sets.enumerated() {
+            data.sessions[i].entries[0].sets[n].weight = set.weight
+            data.sessions[i].entries[0].sets[n].reps = set.reps
+            data.sessions[i].entries[0].sets[n].done = true
+        }
+        data.finishSession()
+        return exercise.id
+    }
+
+    // MARK: weight
+
+    func testWeightMovesUpOnceEverySetHitsTheTopAndRepsDropToTheBottom() {
+        var data = AppData()
+        let id = history(measure: .weight, range: (8, 12), sets: [(60, 12), (60, 12), (60, 12)], into: &data)
+
+        data.startSession(templateId: data.templates[0].id)
+        let entry = data.activeSession!.entries[0]
+
+        XCTAssertTrue(entry.suggested)
+        XCTAssertEqual(entry.sets.map(\.weight), [62.5, 62.5, 62.5])
+        XCTAssertEqual(entry.sets.map(\.reps), [8, 8, 8], "back to the bottom of the range")
+    }
+
+    func testWeightHoldsWhileClimbingTheRange() {
+        var data = AppData()
+        let id = history(measure: .weight, range: (8, 12), sets: [(60, 12), (60, 11), (60, 10)], into: &data)
+
+        data.startSession(templateId: data.templates[0].id)
+        let entry = data.activeSession!.entries[0]
+
+        XCTAssertFalse(entry.suggested)
+        XCTAssertEqual(entry.sets.map(\.weight), [60, 60, 60])
+        XCTAssertEqual(entry.sets.map(\.reps), [12, 11, 10], "last session's reps, set for set")
+        _ = id
+    }
+
+    func testHittingOnlyTheBottomOfTheRangeIsNotEarned() {
+        var data = AppData()
+        _ = history(measure: .weight, range: (8, 12), sets: [(60, 8), (60, 8), (60, 8)], into: &data)
+        data.startSession(templateId: data.templates[0].id)
+        XCTAssertFalse(data.activeSession!.entries[0].suggested)
+        XCTAssertEqual(data.activeSession!.entries[0].sets[0].weight, 60)
+    }
+
+    func testARangeIsInclusiveAtTheTop() {
+        var data = AppData()
+        _ = history(measure: .weight, range: (8, 12), sets: [(60, 13), (60, 12), (60, 12)], into: &data)
+        data.startSession(templateId: data.templates[0].id)
+        XCTAssertTrue(data.activeSession!.entries[0].suggested, "beating the top still counts")
+    }
+
+    // MARK: assisted — less help is the progression
+
+    func testAssistedReducesTheAssistanceByTheIncrement() {
+        var data = AppData()
+        _ = history(measure: .assisted, range: (5, 8), sets: [(20, 8), (20, 8), (20, 8)], into: &data)
+
+        data.startSession(templateId: data.templates[0].id)
+        let entry = data.activeSession!.entries[0]
+
+        XCTAssertTrue(entry.suggested)
+        XCTAssertEqual(entry.sets.map(\.weight), [17.5, 17.5, 17.5])
+        XCTAssertEqual(entry.sets.map(\.reps), [5, 5, 5])
+    }
+
+    func testAssistedUsesTheLeastAssistanceAsLastTime() {
+        var data = AppData()
+        _ = history(measure: .assisted, range: (5, 8), sets: [(20, 8), (15, 8), (20, 8)], into: &data)
+        let s = data.suggestion(for: data.exercises[0].id)
+        XCTAssertEqual(s.lastWeight, 15, "the best set is the one with the least help")
+        XCTAssertEqual(s.weight, 12.5)
+    }
+
+    func testAssistanceNeverGoesBelowZero() {
+        var data = AppData()
+        _ = history(measure: .assisted, range: (5, 8), sets: [(1, 8), (1, 8), (1, 8)], into: &data)
+        XCTAssertEqual(data.suggestion(for: data.exercises[0].id).weight, 0)
+    }
+
+    func testUnassistedAtTheTopHasNothingLeftToSuggest() {
+        var data = AppData()
+        _ = history(measure: .assisted, range: (5, 8), sets: [(0, 8), (0, 8), (0, 8)], into: &data)
+        let s = data.suggestion(for: data.exercises[0].id)
+        XCTAssertFalse(s.earned, "0 kg assistance can't be reduced")
+        XCTAssertEqual(s.weight, 0)
+    }
+
+    // MARK: bodyweight — one more rep, up to the top of the range
+
+    func testBodyweightSuggestsOneMoreRep() {
+        var data = AppData()
+        _ = history(measure: .bodyweight, range: (5, 8), sets: [(nil, 5), (nil, 5), (nil, 5)], into: &data)
+
+        data.startSession(templateId: data.templates[0].id)
+        let entry = data.activeSession!.entries[0]
+
+        XCTAssertTrue(entry.suggested)
+        XCTAssertEqual(entry.sets.map(\.reps), [6, 6, 6])
+        XCTAssertEqual(entry.sets.map(\.weight), [nil, nil, nil])
+    }
+
+    func testBodyweightHoldsUntilEverySetMatchesTheBest() {
+        var data = AppData()
+        _ = history(measure: .bodyweight, range: (5, 8), sets: [(nil, 6), (nil, 6), (nil, 5)], into: &data)
+        data.startSession(templateId: data.templates[0].id)
+        let entry = data.activeSession!.entries[0]
+        XCTAssertFalse(entry.suggested)
+        XCTAssertEqual(entry.sets.map(\.reps), [6, 6, 5])
+    }
+
+    func testBodyweightStopsAtTheTopOfTheRange() {
+        var data = AppData()
+        _ = history(measure: .bodyweight, range: (5, 8), sets: [(nil, 8), (nil, 8), (nil, 8)], into: &data)
+        let s = data.suggestion(for: data.exercises[0].id)
+        XCTAssertFalse(s.earned, "already at the top — nothing to add")
+        XCTAssertNil(s.reps)
+    }
+
+    // MARK: time — five seconds more, up to the top of the range
+
+    func testTimeSuggestsFiveMoreSeconds() {
+        var data = AppData()
+        _ = history(measure: .time, range: (30, 60), sets: [(nil, 40), (nil, 40), (nil, 40)], into: &data)
+        XCTAssertEqual(data.suggestion(for: data.exercises[0].id).reps, 45)
+    }
+
+    func testTimeIsCappedAtTheTopOfTheRange() {
+        var data = AppData()
+        _ = history(measure: .time, range: (30, 60), sets: [(nil, 58), (nil, 58), (nil, 58)], into: &data)
+        let s = data.suggestion(for: data.exercises[0].id)
+        XCTAssertTrue(s.earned)
+        XCTAssertEqual(s.reps, 60, "+5 would overshoot, so stop at the top")
+    }
+
+    // MARK: no range
+
+    func testWithoutARangeAWeightIsNeverBumped() {
+        var data = AppData()
+        let exercise = Exercise(name: "X")
+        data.exercises = [exercise]
+        data.templates = [WorkoutTemplate(name: "T", items: [
+            TemplateItem(exerciseId: exercise.id, sets: 1, targetMin: nil, targetMax: nil)
+        ])]
+        data.startSession(templateId: data.templates[0].id)
+        data.sessions[0].entries[0].sets[0].weight = 60
+        data.sessions[0].entries[0].sets[0].reps = 12
+        data.sessions[0].entries[0].sets[0].done = true
+        data.finishSession()
+
+        let s = data.suggestion(for: exercise.id)
+        XCTAssertFalse(s.earned, "nothing to hit, so nothing is earned")
+        XCTAssertEqual(s.weight, 60)
+    }
+
+    func testAFirstSessionPrefillsTheBottomOfTheRange() {
+        var data = AppData()
+        let exercise = Exercise(name: "X")
+        data.exercises = [exercise]
+        let entry = data.buildEntry(exerciseId: exercise.id, sets: 3, targetMin: 8, targetMax: 12)
+        XCTAssertEqual(entry.sets.map(\.reps), [8, 8, 8])
+        XCTAssertNil(entry.sets[0].weight)
+    }
+
+    // MARK: the target label
+
+    func testTargetLabelsReadNaturally() {
+        XCTAssertEqual(targetLabel(min: 8, max: 12, measure: .weight), "8–12")
+        XCTAssertEqual(targetLabel(min: 12, max: 12, measure: .weight), "12")
+        XCTAssertEqual(targetLabel(min: 30, max: 60, measure: .time), "30–60s")
+        XCTAssertEqual(targetLabel(min: nil, max: 10, measure: .bodyweight), "10")
+        XCTAssertEqual(targetLabel(min: nil, max: nil, measure: .weight), "—")
+    }
+}
+
+/// Everything that used to be a flag or a single number still reads back.
+final class MeasureAndRangeDecodingTests: XCTestCase {
+
+    private func decode<T: Decodable>(_ type: T.Type, _ json: String) throws -> T {
+        try AppData.decoder().decode(type, from: Data(json.utf8))
+    }
+
+    func testAnOldBodyweightFlagBecomesTheBodyweightMeasure() throws {
+        XCTAssertEqual(try decode(Exercise.self, #"{"id":"e","name":"Pull-up","isBodyweight":true}"#).measure, .bodyweight)
+        XCTAssertEqual(try decode(Exercise.self, #"{"id":"e","name":"Chest press","isBodyweight":false}"#).measure, .weight)
+    }
+
+    func testAMeasureDecodesByName() throws {
+        XCTAssertEqual(try decode(Exercise.self, #"{"id":"e","name":"Plank","measure":"time"}"#).measure, .time)
+        XCTAssertEqual(try decode(Exercise.self, #"{"id":"e","name":"Dip","measure":"assisted"}"#).measure, .assisted)
+    }
+
+    func testAnUnknownMeasureFallsBackToWeight() throws {
+        XCTAssertEqual(try decode(Exercise.self, #"{"id":"e","name":"X","measure":"telepathy"}"#).measure, .weight)
+    }
+
+    func testAnOldSingleTargetBecomesBothEndsOfTheRange() throws {
+        let item = try decode(TemplateItem.self, #"{"exerciseId":"e","sets":3,"target":10}"#)
+        XCTAssertEqual(item.targetMin, 10)
+        XCTAssertEqual(item.targetMax, 10)
+
+        let entry = try decode(SessionEntry.self, #"{"id":"en","exerciseId":"e","name":"X","target":12,"bodyweight":true}"#)
+        XCTAssertEqual(entry.targetMin, 12)
+        XCTAssertEqual(entry.targetMax, 12)
+        XCTAssertEqual(entry.measure, .bodyweight)
+    }
+
+    func testARangeRoundTrips() throws {
+        var data = AppData()
+        let exercise = Exercise(name: "Plank", measure: .time)
+        data.exercises = [exercise]
+        data.templates = [WorkoutTemplate(name: "T", items: [
+            TemplateItem(exerciseId: exercise.id, sets: 3, targetMin: 30, targetMax: 60)
+        ])]
+        data.startSession(templateId: data.templates[0].id)
+
+        let restored = try AppData.decoder().decode(AppData.self, from: try data.exportJSON())
+
+        XCTAssertEqual(restored.exercises[0].measure, .time)
+        XCTAssertEqual(restored.templates[0].items[0].targetMin, 30)
+        XCTAssertEqual(restored.templates[0].items[0].targetMax, 60)
+        XCTAssertEqual(restored.sessions[0].entries[0].measure, .time)
+        XCTAssertEqual(restored.sessions[0].entries[0].targetMax, 60)
+    }
+
+    func testTheExportNoLongerWritesTheOldKeys() throws {
+        var data = AppData.seed()
+        data.startSession(templateId: data.templates[0].id)
+        let json = String(decoding: try data.exportJSON(), as: UTF8.self)
+        XCTAssertFalse(json.contains("\"isBodyweight\""))
+        XCTAssertFalse(json.contains("\"bodyweight\""))
+        XCTAssertFalse(json.contains("\"target\""))
+        XCTAssertTrue(json.contains("\"measure\""))
+    }
+}
+
+/// Progress plots whatever the exercise is measured in.
+final class MeasuredProgressTests: XCTestCase {
+
+    private func log(_ data: inout AppData, daysAgo: Int, sets: [(Double?, Int)]) {
+        data.startSession(templateId: data.templates[0].id)
+        let i = data.activeSessionIndex!
+        data.sessions[i].startedAt = Date().addingTimeInterval(TimeInterval(-daysAgo * 86_400))
+        for (n, set) in sets.enumerated() where n < data.sessions[i].entries[0].sets.count {
+            data.sessions[i].entries[0].sets[n].weight = set.0
+            data.sessions[i].entries[0].sets[n].reps = set.1
+            data.sessions[i].entries[0].sets[n].done = true
+        }
+        data.finishSession(at: data.sessions[i].startedAt.addingTimeInterval(3600))
+    }
+
+    private func store(measure: Measure) -> AppData {
+        var data = AppData()
+        let exercise = Exercise(name: "X", measure: measure)
+        data.exercises = [exercise]
+        data.templates = [WorkoutTemplate(name: "T", items: [TemplateItem(exerciseId: exercise.id, sets: 3, target: 8)])]
+        return data
+    }
+
+    func testAssistedPlotsTheLeastAssistanceAndSaysLowerIsBetter() {
+        var data = store(measure: .assisted)
+        log(&data, daysAgo: 4, sets: [(20, 8), (20, 8), (25, 8)])
+        log(&data, daysAgo: 1, sets: [(15, 8), (15, 8), (15, 8)])
+
+        let series = data.progressSeries(for: data.exercises[0].id)
+        XCTAssertEqual(series.map(\.value), [20, 15], "the best set is the one with the least help")
+        XCTAssertEqual(series.map(\.measure), [.assisted, .assisted])
+        XCTAssertTrue(Measure.assisted.lowerIsBetter)
+        XCTAssertFalse(Measure.weight.lowerIsBetter)
+    }
+
+    func testTimedWorkPlotsSeconds() {
+        var data = store(measure: .time)
+        log(&data, daysAgo: 4, sets: [(nil, 40), (nil, 40), (nil, 35)])
+        log(&data, daysAgo: 1, sets: [(nil, 45), (nil, 45), (nil, 45)])
+
+        let series = data.progressSeries(for: data.exercises[0].id)
+        XCTAssertEqual(series.map(\.value), [40, 45])
+        XCTAssertEqual(Measure.time.unit, "s")
+    }
+
+    func testWeightedWorkStillPlotsTheHeaviestSet() {
+        var data = store(measure: .weight)
+        log(&data, daysAgo: 1, sets: [(60, 8), (62.5, 8), (60, 8)])
+        XCTAssertEqual(data.progressSeries(for: data.exercises[0].id).map(\.value), [62.5])
     }
 }

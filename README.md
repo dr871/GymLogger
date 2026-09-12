@@ -72,7 +72,7 @@ stays where it is. Re-sign and install over the top, and everything's back.
 ## What's pre-loaded
 
 **Full Body** — leg press (3×12, 120s rest), chest press, lat pulldown, seated
-cable row, leg curl (3×12, 90s rest), plank (3×40).
+cable row, leg curl (3×12, 90s rest), plank (3 × 30–60s).
 
 All of it is editable: rename anything, change sets and reps, reorder with the
 up/down buttons, add or remove exercises, delete an exercise from the library
@@ -92,14 +92,29 @@ set. The lookup is per-exercise, not per-session — it finds the most recent
 finished session that actually logged *that movement*, so skipping a machine or
 running a different template doesn't break the target.
 
-**Today's fields come prefilled.** Weight is last session's, or last + 2.5 kg if
-you ticked every set at the target reps last time; reps are prefilled to the
-target. When a bump is suggested there's a *Keep 85* button to ignore it and
-hold the weight.
+**Every exercise has a rep range** (e.g. 8–12; seconds for timed work) and
+**progression is double progression**: climb the range at one weight, and once
+every set hits the top, the weight moves and reps drop back to the bottom.
+Today's fields come prefilled accordingly — last session's numbers set for set
+while you're climbing, or the bump when it's earned, with a *Keep 80 kg* button
+to hold. A fixed target is just a range with equal ends, and no range means no
+bump is ever suggested.
 
-**A set can only be ticked once it's logged** — weight and reps, or reps alone
-for exercises marked *Bodyweight* in the exercise editor (pull-ups, dips,
-planks), which also hide the weight box. Unticking is always allowed.
+**How an exercise is measured** decides what a set records and what moves:
+
+| Measure | A set needs | When every set hits the top of the range |
+|---|---|---|
+| Weight | weight > 0, reps > 0 | weight + increment, reps back to the bottom |
+| Assisted | assistance ≥ 0 (0 = unassisted), reps > 0 | assistance − increment, down to 0 |
+| Bodyweight | reps > 0 | +1 rep, up to the top of the range |
+| Time | seconds > 0 | +5s, up to the top of the range |
+
+For bodyweight and timed work there is no weight to move, so "hitting the top"
+means every set matched your best; the reps themselves climb until the range is
+full. Assisted and timed exercises hide or relabel the boxes to suit.
+
+**A set can only be ticked once it's logged** according to its measure (table
+above). Unticking is always allowed.
 
 **Notes** live on the exercise, so "seat 4, handles 2" follows you into every
 future session. Each session also stores a snapshot, so old records keep what
@@ -115,8 +130,9 @@ immediately, even mid-session.
 **During a session the screen stays awake**, so a phone on the bench doesn't
 need unlocking between sets. Only while the session screen is showing.
 
-**Progress** plots the heaviest working set per session for one exercise. For
-bodyweight work with no weight logged (the plank), it plots reps instead.
+**Progress** plots the best set per session in whatever the exercise is
+measured in: kg, seconds, reps — or for assisted work the assistance, labelled
+*lower is better*.
 
 **Export** shares the whole store as a JSON file through the standard share
 sheet.
@@ -131,7 +147,7 @@ sheet.
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 63 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 87 unit tests over the logic layer |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
@@ -142,8 +158,9 @@ Linux CI.
 
 One JSON file in Application Support:
 
-- `exercises` — the durable identity of a movement: name, note, rest, increment
-- `templates` — an ordered list of `{exerciseId, sets, target}`
+- `exercises` — the durable identity of a movement: name, note, rest,
+  increment, and `measure` (`weight` · `assisted` · `bodyweight` · `time`)
+- `templates` — an ordered list of `{exerciseId, sets, targetMin, targetMax}`
 - `sessions` — what actually happened, with name and note snapshotted
 - `settings`, `timer`, `activeSessionId`
 
@@ -159,10 +176,11 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-63 tests over the logic layer: the suggestion rule and every way it should
-*not* fire, per-exercise history lookup, note propagation, the wall-clock timer,
-decode robustness, exercise deletion, backup restore, set-completion rules, and
-the exercise catalogue and presets. No Xcode needed — it runs on the command line.
+87 tests over the logic layer: double progression for each measure and every
+way it should *not* fire, set-completion rules, rep ranges, per-exercise history
+lookup, note propagation, the wall-clock timer, decode robustness (including
+files from before measures and ranges existed), exercise deletion, backup
+restore, and the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
 The SwiftUI layer has no automated coverage. It builds clean with Xcode 26 and
 has been exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), but not yet

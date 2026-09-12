@@ -27,7 +27,7 @@ struct CatalogueExercise: Identifiable, Hashable {
     let muscle: MuscleGroup
     /// nil falls back to `Settings.defaultRestSec`.
     var restSec: Int? = nil
-    var bodyweight: Bool = false
+    var measure: Measure = .weight
 }
 
 enum ExerciseCatalogue {
@@ -36,8 +36,9 @@ enum ExerciseCatalogue {
         CatalogueExercise(name: "Chest press", muscle: .chest),
         CatalogueExercise(name: "Incline chest press", muscle: .chest),
         CatalogueExercise(name: "Chest fly", muscle: .chest),
-        CatalogueExercise(name: "Push-up", muscle: .chest, bodyweight: true),
-        CatalogueExercise(name: "Dip", muscle: .chest, restSec: 120, bodyweight: true),
+        CatalogueExercise(name: "Push-up", muscle: .chest, measure: .bodyweight),
+        CatalogueExercise(name: "Dip", muscle: .chest, restSec: 120, measure: .bodyweight),
+        CatalogueExercise(name: "Assisted dip", muscle: .chest, restSec: 120, measure: .assisted),
 
         // Back
         CatalogueExercise(name: "Lat pulldown", muscle: .back),
@@ -45,7 +46,8 @@ enum ExerciseCatalogue {
         CatalogueExercise(name: "Bent-over row", muscle: .back, restSec: 120),
         CatalogueExercise(name: "Face pull", muscle: .back),
         CatalogueExercise(name: "Straight-arm pulldown", muscle: .back),
-        CatalogueExercise(name: "Pull-up", muscle: .back, restSec: 150, bodyweight: true),
+        CatalogueExercise(name: "Pull-up", muscle: .back, restSec: 150, measure: .bodyweight),
+        CatalogueExercise(name: "Assisted pull-up", muscle: .back, restSec: 150, measure: .assisted),
 
         // Shoulders
         CatalogueExercise(name: "Shoulder press", muscle: .shoulders),
@@ -70,10 +72,10 @@ enum ExerciseCatalogue {
         CatalogueExercise(name: "Calf raise", muscle: .legs),
 
         // Core
-        CatalogueExercise(name: "Plank", muscle: .core, bodyweight: true),
-        CatalogueExercise(name: "Hanging leg raise", muscle: .core, bodyweight: true),
+        CatalogueExercise(name: "Plank", muscle: .core, measure: .time),
+        CatalogueExercise(name: "Hanging leg raise", muscle: .core, measure: .bodyweight),
         CatalogueExercise(name: "Cable crunch", muscle: .core),
-        CatalogueExercise(name: "Back extension", muscle: .core, bodyweight: true),
+        CatalogueExercise(name: "Back extension", muscle: .core, measure: .bodyweight),
     ]
 
     static func entry(named name: String) -> CatalogueExercise? {
@@ -89,7 +91,20 @@ struct PresetItem: Identifiable, Hashable {
     var id: String { exerciseName }
     let exerciseName: String
     let sets: Int
-    let target: Int?
+    let targetMin: Int?
+    let targetMax: Int?
+
+    init(exerciseName: String, sets: Int, range: ClosedRange<Int>) {
+        self.exerciseName = exerciseName
+        self.sets = sets
+        self.targetMin = range.lowerBound
+        self.targetMax = range.upperBound
+    }
+
+    var targetText: String {
+        targetLabel(min: targetMin, max: targetMax,
+                    measure: ExerciseCatalogue.entry(named: exerciseName)?.measure ?? .weight)
+    }
 }
 
 struct WorkoutPreset: Identifiable, Hashable {
@@ -106,68 +121,68 @@ extension WorkoutPreset {
             name: "Push",
             summary: "Chest, shoulders and triceps",
             items: [
-                PresetItem(exerciseName: "Chest press", sets: 4, target: 10),
-                PresetItem(exerciseName: "Incline chest press", sets: 3, target: 10),
-                PresetItem(exerciseName: "Shoulder press", sets: 3, target: 10),
-                PresetItem(exerciseName: "Lateral raise", sets: 3, target: 15),
-                PresetItem(exerciseName: "Triceps pushdown", sets: 3, target: 12),
+                PresetItem(exerciseName: "Chest press", sets: 4, range: 8...12),
+                PresetItem(exerciseName: "Incline chest press", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Shoulder press", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Lateral raise", sets: 3, range: 12...15),
+                PresetItem(exerciseName: "Triceps pushdown", sets: 3, range: 10...15),
             ]
         ),
         WorkoutPreset(
             name: "Pull",
             summary: "Back and biceps",
             items: [
-                PresetItem(exerciseName: "Lat pulldown", sets: 4, target: 10),
-                PresetItem(exerciseName: "Seated cable row", sets: 3, target: 10),
-                PresetItem(exerciseName: "Face pull", sets: 3, target: 15),
-                PresetItem(exerciseName: "Bicep curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Pull-up", sets: 3, target: 8),
+                PresetItem(exerciseName: "Lat pulldown", sets: 4, range: 8...12),
+                PresetItem(exerciseName: "Seated cable row", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Face pull", sets: 3, range: 12...15),
+                PresetItem(exerciseName: "Bicep curl", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Pull-up", sets: 3, range: 5...8),
             ]
         ),
         WorkoutPreset(
             name: "Legs",
             summary: "Quads, hamstrings and calves",
             items: [
-                PresetItem(exerciseName: "Leg press", sets: 4, target: 10),
-                PresetItem(exerciseName: "Leg extension", sets: 3, target: 12),
-                PresetItem(exerciseName: "Leg curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Romanian deadlift", sets: 3, target: 10),
-                PresetItem(exerciseName: "Calf raise", sets: 4, target: 15),
+                PresetItem(exerciseName: "Leg press", sets: 4, range: 8...12),
+                PresetItem(exerciseName: "Leg extension", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Leg curl", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Romanian deadlift", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Calf raise", sets: 4, range: 12...15),
             ]
         ),
         WorkoutPreset(
             name: "Upper body",
             summary: "Everything above the waist",
             items: [
-                PresetItem(exerciseName: "Chest press", sets: 3, target: 10),
-                PresetItem(exerciseName: "Lat pulldown", sets: 3, target: 10),
-                PresetItem(exerciseName: "Shoulder press", sets: 3, target: 10),
-                PresetItem(exerciseName: "Seated cable row", sets: 3, target: 10),
-                PresetItem(exerciseName: "Triceps pushdown", sets: 3, target: 12),
-                PresetItem(exerciseName: "Bicep curl", sets: 3, target: 12),
+                PresetItem(exerciseName: "Chest press", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Lat pulldown", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Shoulder press", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Seated cable row", sets: 3, range: 8...12),
+                PresetItem(exerciseName: "Triceps pushdown", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Bicep curl", sets: 3, range: 10...15),
             ]
         ),
         WorkoutPreset(
             name: "Lower body",
             summary: "Legs and core",
             items: [
-                PresetItem(exerciseName: "Leg press", sets: 4, target: 10),
-                PresetItem(exerciseName: "Leg curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Leg extension", sets: 3, target: 12),
-                PresetItem(exerciseName: "Calf raise", sets: 3, target: 15),
-                PresetItem(exerciseName: "Plank", sets: 3, target: 40),
+                PresetItem(exerciseName: "Leg press", sets: 4, range: 8...12),
+                PresetItem(exerciseName: "Leg curl", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Leg extension", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Calf raise", sets: 3, range: 12...15),
+                PresetItem(exerciseName: "Plank", sets: 3, range: 30...60),
             ]
         ),
         WorkoutPreset(
             name: "Full body",
             summary: "One session covering everything",
             items: [
-                PresetItem(exerciseName: "Leg press", sets: 3, target: 12),
-                PresetItem(exerciseName: "Chest press", sets: 3, target: 12),
-                PresetItem(exerciseName: "Lat pulldown", sets: 3, target: 12),
-                PresetItem(exerciseName: "Seated cable row", sets: 3, target: 12),
-                PresetItem(exerciseName: "Leg curl", sets: 3, target: 12),
-                PresetItem(exerciseName: "Plank", sets: 3, target: 40),
+                PresetItem(exerciseName: "Leg press", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Chest press", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Lat pulldown", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Seated cable row", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Leg curl", sets: 3, range: 10...15),
+                PresetItem(exerciseName: "Plank", sets: 3, range: 30...60),
             ]
         ),
     ]
@@ -189,7 +204,7 @@ extension AppData {
         let created = Exercise(
             name: entry?.name ?? name,
             restSec: entry?.restSec,
-            isBodyweight: entry?.bodyweight ?? false
+            measure: entry?.measure ?? .weight
         )
         exercises.append(created)
         return created.id
@@ -204,7 +219,8 @@ extension AppData {
         guard !wanted.isEmpty else { return nil }
 
         let items = wanted.map {
-            TemplateItem(exerciseId: addExercise(named: $0.exerciseName), sets: $0.sets, target: $0.target)
+            TemplateItem(exerciseId: addExercise(named: $0.exerciseName), sets: $0.sets,
+                         targetMin: $0.targetMin, targetMax: $0.targetMax)
         }
 
         let template = WorkoutTemplate(name: uniqueTemplateName(preset.name), items: items)

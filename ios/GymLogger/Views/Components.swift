@@ -197,12 +197,21 @@ enum Format {
         return value == value.rounded() ? "\(Int(value))" : "\(value)"
     }
 
-    /// "60kg × 12", or "— × 40" for bodyweight work.
-    static func lastSet(_ set: SetEntry?) -> String {
+    /// "60kg × 12"; "−20kg × 8" for assisted (the help, shown as a negative
+    /// load); "× 8" for bodyweight; "40s" for timed work.
+    static func lastSet(_ set: SetEntry?, measure: Measure) -> String {
         guard let set else { return "—" }
-        let weight = set.weight.map { "\(Format.weight($0))kg" } ?? "—"
         let reps = set.reps.map(String.init) ?? "—"
-        return "\(weight) × \(reps)"
+        switch measure {
+        case .weight:
+            return "\(set.weight.map { "\(Format.weight($0))kg" } ?? "—") × \(reps)"
+        case .assisted:
+            return "\(set.weight.map { "−\(Format.weight($0))kg" } ?? "—") × \(reps)"
+        case .bodyweight:
+            return "× \(reps)"
+        case .time:
+            return set.reps.map { "\($0)s" } ?? "—"
+        }
     }
 }
 

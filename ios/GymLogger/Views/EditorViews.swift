@@ -33,8 +33,9 @@ struct TemplateEditorView: View {
         .sheet(isPresented: $showPicker) {
             ExercisePickerView { exerciseId in
                 if let index {
+                    let range = (store.exercise(id: exerciseId)?.measure ?? .weight).defaultTarget
                     store.data.templates[index].items.append(
-                        TemplateItem(exerciseId: exerciseId, sets: 3, target: 12)
+                        TemplateItem(exerciseId: exerciseId, sets: 3, targetMin: range.min, targetMax: range.max)
                     )
                 }
                 showPicker = false
@@ -77,7 +78,7 @@ struct TemplateEditorView: View {
                                 Text(store.exercise(id: item.exerciseId)?.name ?? "Missing exercise")
                                     .font(.system(size: 19, weight: .bold))
                                     .foregroundStyle(Palette.text)
-                                Text("rest \(store.data.restSec(for: item.exerciseId))s · +\(Format.weight(store.data.increment(for: item.exerciseId))) kg")
+                                Text(itemSubtitle(item))
                                     .font(.system(size: 13))
                                     .foregroundStyle(Palette.muted)
                             }
@@ -94,9 +95,17 @@ struct TemplateEditorView: View {
                                     set: { if let v = $0 { store.data.templates[index].items[itemIndex].sets = v } }
                                 ), placeholder: "3")
                             }
+                            let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Target reps").font(.system(size: 13)).foregroundStyle(Palette.muted)
-                                RepsField(value: $store.data.templates[index].items[itemIndex].target, placeholder: "12")
+                                Text(measure == .time ? "Secs, min–max" : "Reps, min–max")
+                                    .font(.system(size: 13)).foregroundStyle(Palette.muted)
+                                HStack(spacing: 6) {
+                                    RepsField(value: $store.data.templates[index].items[itemIndex].targetMin,
+                                              placeholder: "\(measure.defaultTarget.min)")
+                                    Text("–").foregroundStyle(Palette.ghost)
+                                    RepsField(value: $store.data.templates[index].items[itemIndex].targetMax,
+                                              placeholder: "\(measure.defaultTarget.max)")
+                                }
                             }
                         }
 
@@ -130,6 +139,18 @@ struct TemplateEditorView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 24)
         }
+    }
+
+    private func itemSubtitle(_ item: TemplateItem) -> String {
+        let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
+        var parts = ["rest \(store.data.restSec(for: item.exerciseId))s"]
+        switch measure {
+        case .weight: parts.append("+\(Format.weight(store.data.increment(for: item.exerciseId))) kg")
+        case .assisted: parts.append("−\(Format.weight(store.data.increment(for: item.exerciseId))) kg assistance")
+        case .bodyweight: parts.append("bodyweight")
+        case .time: parts.append("timed")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func move(index: Int, from itemIndex: Int, by delta: Int) {
@@ -186,13 +207,25 @@ struct ExerciseEditorView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
 
-                        LabeledField(label: "Bodyweight") {
-                            Toggle("", isOn: $store.data.exercises[index].isBodyweight)
-                                .labelsHidden()
-                                .tint(Palette.accent)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Measured by")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Palette.muted)
+                            Picker("Measured by", selection: $store.data.exercises[index].measure) {
+                                ForEach(Measure.allCases, id: \.self) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
                         }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Palette.line, lineWidth: 1)
+                        )
 
-                        Text("Pull-ups, dips, planks. Sets are ticked off on reps alone and the weight box is hidden.")
+                        Text(measureHelp(store.data.exercises[index].measure))
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
 
@@ -201,8 +234,9 @@ struct ExerciseEditorView: View {
                                       placeholder: "\(store.data.settings.defaultRestSec)")
                         }
 
-                        if !store.data.exercises[index].isBodyweight {
-                            LabeledField(label: "Increase step (kg)") {
+                        if store.data.exercises[index].measure.usesWeight {
+                            LabeledField(label: store.data.exercises[index].measure == .assisted
+                                         ? "Reduce assistance by (kg)" : "Increase step (kg)") {
                                 WeightField(value: $store.data.exercises[index].increment,
                                             placeholder: Format.weight(store.data.settings.defaultIncrement))
                             }
@@ -247,6 +281,19 @@ struct ExerciseEditorView: View {
                     .font(.system(size: 17, weight: .semibold))
             }
         }
+    }
+}
+
+private func measureHelp(_ measure: Measure) -> String {
+    switch measure {
+    case .weight:
+        return "Log the weight and reps. Once every set hits the top of the rep range, the weight goes up and reps drop back to the bottom."
+    case .assisted:
+        return "Log the assistance and reps — 0 means unassisted. Once every set hits the top of the range, the assistance goes down."
+    case .bodyweight:
+        return "Reps only, no weight box. Once every set matches your best, one more rep is suggested, up to the top of the range."
+    case .time:
+        return "Seconds only, no weight box. Once every set matches your best, five more seconds are suggested, up to the top of the range."
     }
 }
 
@@ -377,14 +424,14 @@ struct ExercisePickerView: View {
 
     private func subtitle(for exercise: Exercise) -> String {
         var parts = ["rest \(store.data.restSec(for: exercise.id))s"]
-        if exercise.isBodyweight { parts.append("bodyweight") }
+        if exercise.measure != .weight { parts.append(exercise.measure.title.lowercased()) }
         if !exercise.notes.isEmpty { parts.append(exercise.notes) }
         return parts.joined(separator: " · ")
     }
 
     private func detail(for entry: CatalogueExercise) -> String {
         var parts = ["rest \(entry.restSec ?? store.data.settings.defaultRestSec)s"]
-        if entry.bodyweight { parts.append("bodyweight") }
+        if entry.measure != .weight { parts.append(entry.measure.title.lowercased()) }
         return parts.joined(separator: " · ")
     }
 }

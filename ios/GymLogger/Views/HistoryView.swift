@@ -117,9 +117,17 @@ struct SessionDetailView: View {
                                             .foregroundStyle(Palette.ghost)
                                             .frame(width: 20)
 
-                                        WeightField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].weight)
+                                        if entry.measure.usesWeight {
+                                            WeightField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].weight,
+                                                        placeholder: entry.measure == .assisted ? "assist" : "kg")
+                                        }
 
-                                        RepsField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].reps)
+                                        RepsField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].reps,
+                                                  placeholder: entry.measure.repsNoun)
+
+                                        if entry.measure == .time {
+                                            Text("s").font(.system(size: 15)).foregroundStyle(Palette.muted)
+                                        }
 
                                         Image(systemName: "checkmark")
                                             .font(.system(size: 18, weight: .bold))

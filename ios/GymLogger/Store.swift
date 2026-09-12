@@ -144,12 +144,19 @@ final class Store: ObservableObject {
               data.sessions[s].entries.indices.contains(entryIndex) else { return }
 
         let entry = data.sessions[s].entries[entryIndex]
-        let suggestion = data.suggestion(for: entry.exerciseId, excluding: data.sessions[s].id)
+        let suggestion = data.suggestion(for: entry.exerciseId, excluding: data.sessions[s].id,
+                                         targetMin: entry.targetMin, targetMax: entry.targetMax)
+        let last = data.lastEntry(for: entry.exerciseId, excluding: data.sessions[s].id)?.entry
 
         data.sessions[s].entries[entryIndex].suggested = false
         for i in data.sessions[s].entries[entryIndex].sets.indices
         where !data.sessions[s].entries[entryIndex].sets[i].done {
-            data.sessions[s].entries[entryIndex].sets[i].weight = suggestion.lastWeight
+            if entry.measure.usesWeight {
+                data.sessions[s].entries[entryIndex].sets[i].weight = suggestion.lastWeight
+            }
+            // Back to last time's reps, set for set.
+            let previous = last.flatMap { $0.sets.indices.contains(i) ? $0.sets[i].reps : nil }
+            data.sessions[s].entries[entryIndex].sets[i].reps = previous ?? suggestion.lastReps
         }
     }
 
@@ -159,7 +166,7 @@ final class Store: ObservableObject {
         let entry = data.sessions[s].entries[entryIndex]
         let previous = entry.sets.last
         data.sessions[s].entries[entryIndex].sets.append(
-            SetEntry(weight: previous?.weight, reps: previous?.reps ?? entry.target, done: false)
+            SetEntry(weight: previous?.weight, reps: previous?.reps ?? entry.targetMin, done: false)
         )
     }
 
@@ -178,7 +185,10 @@ final class Store: ObservableObject {
 
     func addExerciseToSession(exerciseId: String) {
         guard let s = data.activeSessionIndex else { return }
-        data.sessions[s].entries.append(data.buildEntry(exerciseId: exerciseId, sets: 3, target: 12))
+        let range = (data.exercise(id: exerciseId)?.measure ?? .weight).defaultTarget
+        data.sessions[s].entries.append(
+            data.buildEntry(exerciseId: exerciseId, sets: 3, targetMin: range.min, targetMax: range.max)
+        )
     }
 
     func setNote(_ note: String, entryIndex: Int) {

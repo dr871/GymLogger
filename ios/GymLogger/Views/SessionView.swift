@@ -198,7 +198,7 @@ struct ExerciseCardView: View {
                     Text(entry.name)
                         .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(Palette.text)
-                    Text("\(entry.sets.count) × \(entry.target.map(String.init) ?? "—") · rest \(store.data.restSec(for: entry.exerciseId))s")
+                    Text("\(entry.sets.count) × \(entry.targetText) · rest \(store.data.restSec(for: entry.exerciseId))s")
                         .font(.system(size: 13))
                         .foregroundStyle(Palette.muted)
                 }
@@ -233,16 +233,36 @@ struct ExerciseCardView: View {
 
     /// Built as a single Text so the sentence wraps as one paragraph.
     private func suggestionText(_ suggestion: Suggestion) -> Text {
-        Text("Hit every rep last time — try \(Text("\(Format.weight(suggestion.weight)) kg").bold())")
+        let reps = suggestion.reps.map { " × \($0)" } ?? ""
+        switch entry.measure {
+        case .weight:
+            return Text("Hit the top of the range last time — try \(Text("\(Format.weight(suggestion.weight)) kg\(reps)").bold())")
+        case .assisted:
+            return Text("Hit the top of the range last time — try \(Text("\(Format.weight(suggestion.weight)) kg assistance\(reps)").bold())")
+        case .bodyweight:
+            return Text("Every set matched last time — try \(Text("\(suggestion.reps ?? 0) reps").bold())")
+        case .time:
+            return Text("Held every set last time — try \(Text("\(suggestion.reps ?? 0)s").bold())")
+        }
+    }
+
+    private func keepTitle(_ suggestion: Suggestion) -> String {
+        switch entry.measure {
+        case .weight: return "Keep \(Format.weight(suggestion.lastWeight)) kg"
+        case .assisted: return "Keep \(Format.weight(suggestion.lastWeight)) kg assistance"
+        case .bodyweight: return "Keep \(suggestion.lastReps ?? 0) reps"
+        case .time: return "Keep \(suggestion.lastReps ?? 0)s"
+        }
     }
 
     private var suggestionBanner: some View {
-        let suggestion = store.data.suggestion(for: entry.exerciseId, excluding: store.data.sessions[sessionIndex].id)
+        let suggestion = store.data.suggestion(for: entry.exerciseId, excluding: store.data.sessions[sessionIndex].id,
+                                               targetMin: entry.targetMin, targetMax: entry.targetMax)
         return VStack(alignment: .leading, spacing: 8) {
             suggestionText(suggestion)
                 .foregroundStyle(Palette.accent)
 
-            Button("Keep \(Format.weight(suggestion.lastWeight))") {
+            Button(keepTitle(suggestion)) {
                 store.ignoreSuggestion(entryIndex: entryIndex)
             }
             .buttonStyle(ChipStyle())
@@ -269,7 +289,7 @@ struct ExerciseCardView: View {
                         .frame(width: 20)
 
                     // Last session, greyed out, right beside today's fields.
-                    Text(Format.lastSet(lastEntry?.entry.sets[safe: setIndex]))
+                    Text(Format.lastSet(lastEntry?.entry.sets[safe: setIndex], measure: entry.measure))
                         .font(.system(size: 14))
                         .monospacedDigit()
                         .foregroundStyle(Palette.muted)
@@ -278,12 +298,20 @@ struct ExerciseCardView: View {
                         .frame(minWidth: 92, alignment: .leading)
 
                     // Nothing to log for pull-ups or a plank, so no empty box.
-                    if !entry.bodyweight {
-                        WeightField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].weight)
+                    if entry.measure.usesWeight {
+                        WeightField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].weight,
+                                    placeholder: entry.measure == .assisted ? "assist" : "kg")
                     }
 
-                    RepsField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps)
+                    RepsField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps,
+                              placeholder: entry.measure.repsNoun)
                         .frame(maxWidth: 72)
+
+                    if entry.measure == .time {
+                        Text("s")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Palette.muted)
+                    }
 
                     TickButton(done: set.done, enabled: set.done || entry.canComplete(setIndex: setIndex)) {
                         store.toggleSet(entryIndex: entryIndex, setIndex: setIndex)
@@ -309,14 +337,26 @@ struct ExerciseCardView: View {
         let pending = entry.sets.indices.filter { !entry.sets[$0].done }
         guard pending.contains(where: { !entry.canComplete(setIndex: $0) }) else { return nil }
 
-        let needsReps = pending.contains { ($0 < entry.sets.count) && (entry.sets[$0].reps ?? 0) <= 0 }
-        if entry.bodyweight { return "Enter reps to tick a set off." }
-        let needsWeight = pending.contains { (entry.sets[$0].weight ?? 0) <= 0 }
-
-        switch (needsWeight, needsReps) {
-        case (true, true): return "Enter a weight and reps to tick a set off."
-        case (true, false): return "Enter a weight to tick a set off."
-        default: return "Enter reps to tick a set off."
+        let needsReps = pending.contains { (entry.sets[$0].reps ?? 0) <= 0 }
+        switch entry.measure {
+        case .bodyweight:
+            return "Enter reps to tick a set off."
+        case .time:
+            return "Enter the seconds held to tick a set off."
+        case .assisted:
+            let needsHelp = pending.contains { entry.sets[$0].weight == nil || entry.sets[$0].weight! < 0 }
+            switch (needsHelp, needsReps) {
+            case (true, true): return "Enter the assistance (0 if none) and reps to tick a set off."
+            case (true, false): return "Enter the assistance — 0 if none — to tick a set off."
+            default: return "Enter reps to tick a set off."
+            }
+        case .weight:
+            let needsWeight = pending.contains { (entry.sets[$0].weight ?? 0) <= 0 }
+            switch (needsWeight, needsReps) {
+            case (true, true): return "Enter a weight and reps to tick a set off."
+            case (true, false): return "Enter a weight to tick a set off."
+            default: return "Enter reps to tick a set off."
+            }
         }
     }
 
