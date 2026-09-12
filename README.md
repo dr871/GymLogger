@@ -18,9 +18,11 @@ open ios/GymLogger.xcodeproj
 1. Select the **GymLogger** target → **Signing & Capabilities**.
 2. Set **Team** to your Apple ID — add one under Xcode → Settings → Accounts.
    A free Apple ID is enough; no paid developer account needed.
-3. Change the bundle identifier from `com.example.GymLogger` to something
-   unique, e.g. `com.yourname.GymLogger`. Free accounts reject identifiers
-   someone else has already registered.
+3. The bundle identifier is `com.hellorogers.gymlogger`. If you're building
+   under a different Apple ID, change it to your own reverse-DNS name first —
+   free accounts reject identifiers someone else has already registered — and
+   do it *before* the first install: iOS treats a new identifier as a
+   different app, so history under the old one is left behind.
 4. Plug in your iPhone, choose it as the run destination, press **⌘R**.
 5. First run only: on the phone, **Settings → General → VPN & Device
    Management** → trust your developer certificate.
@@ -45,6 +47,28 @@ A copy of the live data is also kept current in the **Files** app, under On My
 iPhone → GymLogger → `GymLogger-backup.json`, so you can copy it out without
 opening the app. Deleting that copy is harmless; the live file is elsewhere.
 
+## Sideloading (no Mac at install time)
+
+```sh
+ios/build-ipa.sh            # → ios/build/GymLogger.ipa
+```
+
+Builds an **unsigned** Release `.ipa` — no Apple ID, certificate or profile
+involved. Hand it to a signing service, AltStore or SideStore, which signs it
+and installs it. The app needs no entitlements (local notifications don't
+require one), so any signing route works.
+
+The build number is the git commit count, so the version shown under
+**Settings → General → About → GymLogger** — or in your signing tool — tells you
+exactly which build is on the phone.
+
+**Updating:** build a new `.ipa`, sign it, and install it **over the top**.
+Never delete the app first — that erases the data container, including the
+Files-app backup copy inside it. Export first if in any doubt.
+
+**If the certificate expires or is revoked**, the app stops opening but its data
+stays where it is. Re-sign and install over the top, and everything's back.
+
 ## What's pre-loaded
 
 **Full Body** — leg press (3×12, 120s rest), chest press, lat pulldown, seated
@@ -53,6 +77,13 @@ cable row, leg curl (3×12, 90s rest), plank (3×40).
 All of it is editable: rename anything, change sets and reps, reorder with the
 up/down buttons, add or remove exercises, delete an exercise from the library
 outright, create more workout templates.
+
+**Workouts** is reachable from Home as well as Settings. *+ Add exercise*
+browses a catalogue of ~30 standard exercises grouped by muscle, alongside your
+own; the search box also creates a custom one when nothing matches. *+ New
+workout* offers standard splits — Push, Pull, Legs, Upper, Lower, Full body —
+as a ticklist, so you take only the exercises you want. Nothing is duplicated:
+an exercise already in your library is reused by name.
 
 ## How it works
 
@@ -65,6 +96,10 @@ running a different template doesn't break the target.
 you ticked every set at the target reps last time; reps are prefilled to the
 target. When a bump is suggested there's a *Keep 85* button to ignore it and
 hold the weight.
+
+**A set can only be ticked once it's logged** — weight and reps, or reps alone
+for exercises marked *Bodyweight* in the exercise editor (pull-ups, dips,
+planks), which also hide the weight box. Unticking is always allowed.
 
 **Notes** live on the exercise, so "seat 4, handles 2" follows you into every
 future session. Each session also stores a snapshot, so old records keep what
@@ -93,9 +128,11 @@ sheet.
 | `ios/GymLogger/Core/Models.swift` | value types for the whole data model |
 | `ios/GymLogger/Core/Logic.swift` | last-session lookup, suggestion rule, progress series |
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
+| `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 39 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 63 unit tests over the logic layer |
+| `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
 that decides what number to show you builds and tests anywhere, including on
@@ -122,12 +159,14 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-39 tests over the logic layer: the suggestion rule and every way it should
+63 tests over the logic layer: the suggestion rule and every way it should
 *not* fire, per-exercise history lookup, note propagation, the wall-clock timer,
-decode robustness, exercise deletion, and backup restore. No Xcode needed — it runs on the command line.
+decode robustness, exercise deletion, backup restore, set-completion rules, and
+the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
-The SwiftUI layer has no automated coverage; it was written against the tested
-core but has not been run on a device.
+The SwiftUI layer has no automated coverage. It builds clean with Xcode 26 and
+has been exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), but not yet
+on physical hardware.
 
 `ios/project.yml` regenerates an equivalent Xcode project via
 `brew install xcodegen && xcodegen generate` if the checked-in one ever goes

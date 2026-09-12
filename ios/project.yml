@@ -3,7 +3,7 @@
 # rebuilds an equivalent one from this spec.
 name: GymLogger
 options:
-  bundleIdPrefix: com.example
+  bundleIdPrefix: com.hellorogers
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
@@ -16,7 +16,7 @@ targets:
       - GymLogger
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.GymLogger
+        PRODUCT_BUNDLE_IDENTIFIER: com.hellorogers.gymlogger
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIFileSharingEnabled: YES
