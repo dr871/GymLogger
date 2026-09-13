@@ -197,6 +197,15 @@ enum Format {
         return value == value.rounded() ? "\(Int(value))" : "\(value)"
     }
 
+    /// "Legs 6 · Chest 4 · Back 4", biggest first, plus any unassigned.
+    static func muscleBreakdown(_ week: WeekVolume) -> String {
+        var parts = week.sets
+            .sorted { $0.value == $1.value ? $0.key.rawValue < $1.key.rawValue : $0.value > $1.value }
+            .map { "\($0.key.title) \($0.value)" }
+        if week.unassignedSets > 0 { parts.append("Unassigned \(week.unassignedSets)") }
+        return parts.isEmpty ? "No sets yet" : parts.joined(separator: " · ")
+    }
+
     /// "60kg × 12"; "−20kg × 8" for assisted (the help, shown as a negative
     /// load); "× 8" for bodyweight; "40s" for timed work.
     static func lastSet(_ set: SetEntry?, measure: Measure) -> String {

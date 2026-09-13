@@ -134,6 +134,21 @@ need unlocking between sets. Only while the session screen is showing.
 measured in: kg, seconds, reps — or for assisted work the assistance, labelled
 *lower is better*.
 
+**Personal records** are derived from history, never stored, so they can't go
+stale: heaviest set and best estimated 1RM (Epley) for weighted work, least
+assistance, most reps, longest hold. They show under the Progress chart, a
+session's detail lists any it set, and finishing a session that beat one pops
+a summary. A record counts when it strictly beats every earlier session — so
+your first session sets the baseline.
+
+**Weekly volume** is working sets per muscle group per week — the unit the
+10–20 sets/muscle guideline uses, and a fair comparison across a leg press and
+a lateral raise where tonnage isn't. Each exercise has a muscle group (from the
+catalogue, editable, read live so recategorising moves its history). Home shows
+this week against last; Progress charts the last eight weeks stacked by muscle.
+For a full-body routine this is the quickest way to see whether the template
+is balanced.
+
 **Export** shares the whole store as a JSON file through the standard share
 sheet.
 
@@ -145,9 +160,10 @@ sheet.
 | `ios/GymLogger/Core/Logic.swift` | last-session lookup, suggestion rule, progress series |
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
+| `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 87 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 107 unit tests over the logic layer |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
@@ -159,7 +175,8 @@ Linux CI.
 One JSON file in Application Support:
 
 - `exercises` — the durable identity of a movement: name, note, rest,
-  increment, and `measure` (`weight` · `assisted` · `bodyweight` · `time`)
+  increment, `measure` (`weight` · `assisted` · `bodyweight` · `time`) and
+  `muscle` (chest · back · shoulders · arms · legs · core, or none)
 - `templates` — an ordered list of `{exerciseId, sets, targetMin, targetMax}`
 - `sessions` — what actually happened, with name and note snapshotted
 - `settings`, `timer`, `activeSessionId`
@@ -176,11 +193,12 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-87 tests over the logic layer: double progression for each measure and every
-way it should *not* fire, set-completion rules, rep ranges, per-exercise history
+107 tests over the logic layer: double progression for each measure and every
+way it should *not* fire, set-completion rules, rep ranges, personal records
+and when one counts as new, weekly sets per muscle, per-exercise history
 lookup, note propagation, the wall-clock timer, decode robustness (including
-files from before measures and ranges existed), exercise deletion, backup
-restore, and the exercise catalogue and presets. No Xcode needed — it runs on the command line.
+files from before measures, ranges and muscles existed), exercise deletion,
+backup restore, and the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
 The SwiftUI layer has no automated coverage. It builds clean with Xcode 26 and
 has been exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), but not yet

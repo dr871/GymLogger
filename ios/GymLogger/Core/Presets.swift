@@ -6,7 +6,7 @@ import Foundation
 // Adding either reuses whatever is already in the library by name, so nothing
 // gets duplicated.
 
-enum MuscleGroup: String, CaseIterable, Hashable {
+enum MuscleGroup: String, Codable, CaseIterable, Hashable {
     case chest, back, shoulders, arms, legs, core
 
     var title: String {
@@ -204,7 +204,8 @@ extension AppData {
         let created = Exercise(
             name: entry?.name ?? name,
             restSec: entry?.restSec,
-            measure: entry?.measure ?? .weight
+            measure: entry?.measure ?? .weight,
+            muscle: entry?.muscle
         )
         exercises.append(created)
         return created.id

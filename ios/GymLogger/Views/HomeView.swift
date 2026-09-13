@@ -53,6 +53,22 @@ struct HomeView: View {
                         .buttonStyle(.plain)
                     }
 
+                    if let week = thisWeek {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("This week")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Palette.muted)
+                            Text("\(week.now.totalSets) set\(week.now.totalSets == 1 ? "" : "s") · last week \(week.last.totalSets)")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Palette.text)
+                            Text(Format.muscleBreakdown(week.now))
+                                .font(.system(size: 14))
+                                .foregroundStyle(Palette.muted)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .card()
+                    }
+
                     SectionHeader(title: "Recent sessions")
 
                     let recent = Array(store.data.finishedSessions.prefix(5))
@@ -82,8 +98,23 @@ struct HomeView: View {
             }
             .navigationTitle("GymLogger")
             .navigationDestination(isPresented: $showSession) { SessionView() }
+            .alert("New records", isPresented: Binding(
+                get: { store.finishSummary != nil },
+                set: { if !$0 { store.finishSummary = nil } }
+            ), presenting: store.finishSummary) { _ in
+                Button("Nice", role: .cancel) {}
+            } message: { summary in
+                Text(summary.lines.joined(separator: "\n"))
+            }
             .screen()
         }
+    }
+
+    /// Sets this week and last, once there is anything to say.
+    private var thisWeek: (now: WeekVolume, last: WeekVolume)? {
+        let weeks = store.data.weeklyVolume(weeks: 2)
+        guard weeks.count == 2, weeks[0].totalSets + weeks[1].totalSets > 0 else { return nil }
+        return (weeks[1], weeks[0])
     }
 
     /// The phone is the only copy. Say so, quietly, once there's something
@@ -107,7 +138,7 @@ struct SessionRow: View {
                 Text(Format.date(session.startedAt))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Palette.text)
-                Text("\(session.name) · \(session.workedExerciseCount) exercises · \(session.completedSetCount) sets")
+                Text("\(session.name) · \(session.workedExerciseCount) exercise\(session.workedExerciseCount == 1 ? "" : "s") · \(session.completedSetCount) set\(session.completedSetCount == 1 ? "" : "s")")
                     .font(.system(size: 14))
                     .foregroundStyle(Palette.muted)
             }

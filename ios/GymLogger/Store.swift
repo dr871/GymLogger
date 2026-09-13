@@ -12,6 +12,13 @@ final class Store: ObservableObject {
         didSet { scheduleSave() }
     }
 
+    /// Records set by the session that just finished, for Home to celebrate.
+    struct FinishSummary: Identifiable {
+        var id: String
+        var lines: [String]
+    }
+    @Published var finishSummary: FinishSummary?
+
     @Published private(set) var notificationsAllowed = false
     @Published private(set) var notificationsDenied = false
 
@@ -105,7 +112,16 @@ final class Store: ObservableObject {
 
     func finishSession() {
         cancelRest()
+        let id = data.activeSessionId
         data.finishSession()
+        guard let id, let session = data.sessions.first(where: { $0.id == id }) else { return }
+        let records = data.recordsSet(in: id)
+        guard !records.isEmpty else { return }
+        let lines = records.compactMap { hit -> String? in
+            guard let entry = session.entries.first(where: { $0.exerciseId == hit.exerciseId }) else { return nil }
+            return "\(entry.name) — \(hit.record.kind.title.lowercased()) \(hit.record.text(measure: entry.measure))"
+        }
+        finishSummary = FinishSummary(id: id, lines: lines)
     }
 
     func discardSession() {

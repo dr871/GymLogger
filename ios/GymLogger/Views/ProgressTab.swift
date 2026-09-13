@@ -16,9 +16,12 @@ struct ProgressTab: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    volumeCard
+
                     if exercises.isEmpty {
                         EmptyHint(text: "No exercises yet.")
                     } else {
+                        SectionHeader(title: "Exercise")
                         picker
 
                         if let exercise = chosen {
@@ -30,6 +33,8 @@ struct ProgressTab: View {
                                     .foregroundStyle(Palette.muted)
 
                                 chart(series: series)
+
+                                records(for: exercise)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .card()
@@ -64,6 +69,92 @@ struct ProgressTab: View {
             .navigationTitle("Progress")
             .screen()
         }
+    }
+
+    /// Personal records for the chosen exercise, derived from history.
+    @ViewBuilder
+    private func records(for exercise: Exercise) -> some View {
+        let records = store.data.personalRecords(for: exercise.id)
+        if !records.isEmpty {
+            HStack(spacing: 8) {
+                ForEach(records) { record in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(record.kind.title)
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.muted)
+                        Text(record.text(measure: exercise.measure))
+                            .font(.system(size: 16, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(Palette.text)
+                        Text(Format.date(record.date))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Palette.ghost)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Palette.surface2)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    /// Working sets per muscle, the last eight weeks, current week last.
+    private var volumeCard: some View {
+        let weeks = store.data.weeklyVolume(weeks: 8)
+        let series = VolumeBar.rows(for: weeks)
+        // Explicit types: the type-checker choked on this inline (17 min build).
+        let firstWeek: Date = weeks.first?.weekStart ?? Date()
+        let lastWeek: Date = weeks.last?.weekStart ?? Date()
+        let windowEnd: Date = Calendar.current.date(byAdding: .weekOfYear, value: 1, to: lastWeek) ?? lastWeek
+        let domain: ClosedRange<Date> = firstWeek...windowEnd
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Sets per muscle — last 8 weeks")
+                .font(.system(size: 14))
+                .foregroundStyle(Palette.muted)
+
+            if series.isEmpty {
+                Text("Nothing logged in the last eight weeks.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Palette.muted)
+                    .padding(.vertical, 12)
+            } else {
+                Chart(series) { row in
+                    BarMark(
+                        x: .value("Week", row.week, unit: .weekOfYear),
+                        y: .value("Sets", row.sets)
+                    )
+                    .foregroundStyle(by: .value("Muscle", row.muscle))
+                }
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .weekOfYear)) {
+                        AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                            .foregroundStyle(Palette.ghost)
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { _ in
+                        AxisGridLine().foregroundStyle(Palette.line)
+                        AxisValueLabel().foregroundStyle(Palette.ghost)
+                    }
+                }
+                // Pin the axis to the whole window so empty weeks show as gaps
+                // rather than the chart shrinking to whatever has data.
+                .chartXScale(domain: domain)
+                .chartLegend(position: .bottom, spacing: 8)
+                .frame(height: 210)
+
+                if let now = weeks.last {
+                    Text("This week: \(Format.muscleBreakdown(now))")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.muted)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
     }
 
     private var picker: some View {
@@ -140,5 +231,29 @@ struct ProgressTab: View {
         }
         parts.append("\(point.setCount) sets")
         return parts.joined(separator: " · ")
+    }
+}
+
+/// One stacked segment of the weekly volume chart. A named type keeps the
+/// chart's closure trivial for the type-checker.
+private struct VolumeBar: Identifiable {
+    let week: Date
+    let muscle: String
+    let sets: Int
+    var id: String { "\(week.timeIntervalSince1970)-\(muscle)" }
+
+    static func rows(for weeks: [WeekVolume]) -> [VolumeBar] {
+        var rows: [VolumeBar] = []
+        for week in weeks {
+            for muscle in MuscleGroup.allCases {
+                if let n = week.sets[muscle], n > 0 {
+                    rows.append(VolumeBar(week: week.weekStart, muscle: muscle.title, sets: n))
+                }
+            }
+            if week.unassignedSets > 0 {
+                rows.append(VolumeBar(week: week.weekStart, muscle: "Unassigned", sets: week.unassignedSets))
+            }
+        }
+        return rows
     }
 }

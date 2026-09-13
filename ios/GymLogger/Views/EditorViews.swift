@@ -229,6 +229,21 @@ struct ExerciseEditorView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Palette.muted)
 
+                        LabeledField(label: "Muscle group") {
+                            Picker("Muscle group", selection: $store.data.exercises[index].muscle) {
+                                Text("None").tag(MuscleGroup?.none)
+                                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                                    Text(muscle.title).tag(MuscleGroup?.some(muscle))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(Palette.text)
+                        }
+
+                        Text("Counts this exercise's sets towards weekly volume on Progress.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+
                         LabeledField(label: "Rest timer (sec)") {
                             RepsField(value: $store.data.exercises[index].restSec,
                                       placeholder: "\(store.data.settings.defaultRestSec)")

@@ -26,7 +26,7 @@ extension Settings {
 }
 
 extension Exercise {
-    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment, measure }
+    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment, measure, muscle }
     /// Read-only: how older files said it.
     enum LegacyKeys: String, CodingKey { case isBodyweight }
 }
@@ -86,7 +86,8 @@ extension Exercise {
             restSec: c.maybe(.restSec),
             increment: c.maybe(.increment),
             measure: c.maybe(.measure)
-                ?? (legacy.or(.isBodyweight, false) ? .bodyweight : .weight)
+                ?? (legacy.or(.isBodyweight, false) ? .bodyweight : .weight),
+            muscle: c.maybe(.muscle)
         )
     }
 }

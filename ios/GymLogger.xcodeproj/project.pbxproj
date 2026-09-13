@@ -13,6 +13,7 @@
 		F14FF49B06D698A62D6D9841 /* Logic.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1FD072A46CEB54B4FEA2BB8 /* Logic.swift */; };
 		A1B2C3D40000000000000201 /* WorkoutsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000202 /* WorkoutsView.swift */; };
 		A1B2C3D40000000000000101 /* Presets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000102 /* Presets.swift */; };
+		A1B2C3D40000000000000301 /* Records.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000302 /* Records.swift */; };
 		4AA28C02F97D3546F3506FD9 /* Decoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = B837345F55CE48086F8B9B2D /* Decoding.swift */; };
 		15DCEACAA3372188146C548E /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED8F394DA3FFC4EAC9D8A20 /* Theme.swift */; };
 		4EA230503CDA11AA6390B6CA /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E46D4C100D94E7D17B29086 /* Components.swift */; };
@@ -33,6 +34,7 @@
 		E1FD072A46CEB54B4FEA2BB8 /* Logic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logic.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000202 /* WorkoutsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutsView.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000102 /* Presets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Presets.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000000302 /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		B837345F55CE48086F8B9B2D /* Decoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Decoding.swift; sourceTree = "<group>"; };
 		FED8F394DA3FFC4EAC9D8A20 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		6E46D4C100D94E7D17B29086 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -85,6 +87,7 @@
 				94257C294D93EA80D979A835 /* Models.swift */,
 				E1FD072A46CEB54B4FEA2BB8 /* Logic.swift */,
 				A1B2C3D40000000000000102 /* Presets.swift */,
+				A1B2C3D40000000000000302 /* Records.swift */,
 				B837345F55CE48086F8B9B2D /* Decoding.swift */,
 			);
 			path = Core;
@@ -189,6 +192,7 @@
 				28E1A2FE108B61212BC466DC /* Models.swift in Sources */,
 				F14FF49B06D698A62D6D9841 /* Logic.swift in Sources */,
 				A1B2C3D40000000000000101 /* Presets.swift in Sources */,
+				A1B2C3D40000000000000301 /* Records.swift in Sources */,
 				4AA28C02F97D3546F3506FD9 /* Decoding.swift in Sources */,
 				15DCEACAA3372188146C548E /* Theme.swift in Sources */,
 				4EA230503CDA11AA6390B6CA /* Components.swift in Sources */,

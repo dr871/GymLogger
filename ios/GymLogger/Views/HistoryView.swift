@@ -91,6 +91,24 @@ struct SessionDetailView: View {
                 }
                 .padding(.top, 4)
 
+                let records = store.data.recordsSet(in: session.id)
+                if !records.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Records set")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+                        ForEach(Array(records.enumerated()), id: \.offset) { _, hit in
+                            if let entry = session.entries.first(where: { $0.exerciseId == hit.exerciseId }) {
+                                Text("\(entry.name) — \(hit.record.kind.title.lowercased()) \(hit.record.text(measure: entry.measure))")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Palette.accent)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
+                }
+
                 ForEach(Array(session.entries.enumerated()), id: \.element.id) { entryIndex, entry in
                     VStack(alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {

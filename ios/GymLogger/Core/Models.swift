@@ -67,14 +67,18 @@ struct Exercise: Codable, Identifiable, Hashable {
     /// how much less help to suggest.
     var increment: Double?
     var measure: Measure = .weight
+    /// For weekly volume. Read live, not snapshotted: recategorising an
+    /// exercise should move its whole history with it.
+    var muscle: MuscleGroup?
 
-    init(id: String = newID("ex"), name: String, notes: String = "", restSec: Int? = nil, increment: Double? = nil, measure: Measure = .weight) {
+    init(id: String = newID("ex"), name: String, notes: String = "", restSec: Int? = nil, increment: Double? = nil, measure: Measure = .weight, muscle: MuscleGroup? = nil) {
         self.id = id
         self.name = name
         self.notes = notes
         self.restSec = restSec
         self.increment = increment
         self.measure = measure
+        self.muscle = muscle
     }
 }
 
@@ -223,12 +227,12 @@ func newID(_ prefix: String) -> String {
 extension AppData {
     /// The workout as it stands today, pre-loaded on first launch.
     static func seed() -> AppData {
-        let legPress = Exercise(name: "Leg press", restSec: 120)
-        let chestPress = Exercise(name: "Chest press")
-        let latPulldown = Exercise(name: "Lat pulldown")
-        let cableRow = Exercise(name: "Seated cable row")
-        let legCurl = Exercise(name: "Leg curl")
-        let plank = Exercise(name: "Plank", measure: .time)
+        let legPress = Exercise(name: "Leg press", restSec: 120, muscle: .legs)
+        let chestPress = Exercise(name: "Chest press", muscle: .chest)
+        let latPulldown = Exercise(name: "Lat pulldown", muscle: .back)
+        let cableRow = Exercise(name: "Seated cable row", muscle: .back)
+        let legCurl = Exercise(name: "Leg curl", muscle: .legs)
+        let plank = Exercise(name: "Plank", measure: .time, muscle: .core)
 
         let exercises = [legPress, chestPress, latPulldown, cableRow, legCurl, plank]
 
