@@ -42,7 +42,7 @@ extension WorkoutTemplate {
 }
 
 extension SetEntry {
-    enum CodingKeys: String, CodingKey { case id, weight, reps, done }
+    enum CodingKeys: String, CodingKey { case id, weight, reps, done, warmup }
 }
 
 extension SessionEntry {
@@ -125,7 +125,8 @@ extension SetEntry {
             id: c.or(.id, newID("set")),
             weight: c.maybe(.weight),
             reps: c.maybe(.reps),
-            done: c.or(.done, false)
+            done: c.or(.done, false),
+            warmup: c.or(.warmup, false)
         )
     }
 }

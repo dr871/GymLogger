@@ -130,9 +130,9 @@ struct SessionDetailView: View {
                             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
                                 if set.done {
                                     HStack(spacing: 8) {
-                                        Text("\(setIndex + 1)")
-                                            .font(.system(size: 14))
-                                            .foregroundStyle(Palette.ghost)
+                                        Text(entry.workingIndex(of: setIndex).map { "\($0 + 1)" } ?? "W")
+                                            .font(.system(size: 14, weight: set.warmup ? .semibold : .regular))
+                                            .foregroundStyle(set.warmup ? Palette.warn : Palette.ghost)
                                             .frame(width: 20)
 
                                         if entry.measure.usesWeight {

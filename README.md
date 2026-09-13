@@ -87,6 +87,10 @@ an exercise already in your library is reused by name.
 
 ## How it works
 
+**Home leads with the workout that's waited longest** — never done first,
+then least recently finished — and says why ("last done Sat, 5 Sep · up
+next"). With one workout, nothing changes.
+
 **Last session's numbers** sit greyed out beside today's fields, matched set for
 set. The lookup is per-exercise, not per-session — it finds the most recent
 finished session that actually logged *that movement*, so skipping a machine or
@@ -116,6 +120,21 @@ full. Assisted and timed exercises hide or relabel the boxes to suit.
 **A set can only be ticked once it's logged** according to its measure (table
 above). Unticking is always allowed.
 
+**Warm-up sets** — *+ Warm-up* adds one at the top at roughly half the
+working weight; tapping a set's number toggles it. They're logged but never
+count: not for progression, records, volume, or whether a session "did" the
+exercise, and last session's numbers line up against working sets only.
+
+**±** chips step every un-ticked set by the exercise's increment, so a stack
+that doesn't match the suggestion is two taps rather than a decimal pad.
+
+**Timed holds have a timer**: ▶ counts up in place of the seconds field, ■
+writes the time. It buzzes as you pass the target.
+
+**Adding an exercise to today** offers to add it to the workout too, so a
+one-off stays one-off and a keeper is kept. **Duplicate this workout** in the
+editor makes a B day out of an A day.
+
 **Notes** live on the exercise, so "seat 4, handles 2" follows you into every
 future session. Each session also stores a snapshot, so old records keep what
 was true at the time — renaming an exercise doesn't rewrite history.
@@ -130,9 +149,11 @@ immediately, even mid-session.
 **During a session the screen stays awake**, so a phone on the bench doesn't
 need unlocking between sets. Only while the session screen is showing.
 
-**Progress** plots the best set per session in whatever the exercise is
-measured in: kg, seconds, reps — or for assisted work the assistance, labelled
-*lower is better*.
+**Progress** plots, per session, the best **estimated one-rep max** for
+weighted work (Epley, `weight × (1 + reps/30)`) — so the line moves while reps
+climb at one weight, not only when the weight changes — and otherwise the best
+set in the exercise's own unit: seconds, reps, or for assisted work the
+assistance, labelled *lower is better*.
 
 **Personal records** are derived from history, never stored, so they can't go
 stale: heaviest set and best estimated 1RM (Epley) for weighted work, least
@@ -163,7 +184,7 @@ sheet.
 | `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 107 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 137 unit tests over the logic layer |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
@@ -178,8 +199,15 @@ One JSON file in Application Support:
   increment, `measure` (`weight` · `assisted` · `bodyweight` · `time`) and
   `muscle` (chest · back · shoulders · arms · legs · core, or none)
 - `templates` — an ordered list of `{exerciseId, sets, targetMin, targetMax}`
-- `sessions` — what actually happened, with name and note snapshotted
+- `sessions` — what actually happened, with name and note snapshotted; each
+  set carries `warmup`
 - `settings`, `timer`, `activeSessionId`
+
+On launch the live file is tried first; if it's missing or unreadable, the
+mirror in Documents is loaded instead and a fresh live file written, so a torn
+write costs nothing while an intact copy sits next door. An unreadable live
+file is kept as `data.corrupt.json`. `version` is 2 (measures, ranges, muscles,
+warm-ups); version-1 files still load.
 
 Swift's synthesized `Codable` throws when a key is missing rather than using the
 property's default. For the single file holding all of someone's training
@@ -193,12 +221,14 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-107 tests over the logic layer: double progression for each measure and every
-way it should *not* fire, set-completion rules, rep ranges, personal records
-and when one counts as new, weekly sets per muscle, per-exercise history
-lookup, note propagation, the wall-clock timer, decode robustness (including
-files from before measures, ranges and muscles existed), exercise deletion,
-backup restore, and the exercise catalogue and presets. No Xcode needed — it runs on the command line.
+137 tests over the logic layer: double progression for each measure and every
+way it should *not* fire, warm-up sets never counting, set-completion rules,
+rep ranges, estimated-max progress, personal records and when one counts as
+new, weekly sets per muscle, which workout is next, duplicating and adding to
+workouts, weight stepping, per-exercise history lookup, note propagation, the
+wall-clock timer, decode robustness (including files from before measures,
+ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
+the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
 The SwiftUI layer has no automated coverage. It builds clean with Xcode 26 and
 has been exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), but not yet

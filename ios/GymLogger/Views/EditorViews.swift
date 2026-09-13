@@ -131,6 +131,12 @@ struct TemplateEditorView: View {
                 Button("+ Add exercise") { showPicker = true }
                     .buttonStyle(BigButtonStyle())
 
+                Button("Duplicate this workout") {
+                    store.data.duplicateTemplate(id: templateId)
+                    dismiss()
+                }
+                .buttonStyle(BigButtonStyle())
+
                 if store.data.templates.count > 1 {
                     Button("Delete this workout") { confirmDelete = true }
                         .buttonStyle(BigButtonStyle(destructive: true))

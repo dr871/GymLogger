@@ -172,8 +172,11 @@ struct ProgressTab: View {
     /// "Plank — best set (s)", or for assisted work a reminder that the line
     /// should be heading down.
     private func chartTitle(_ exercise: Exercise) -> String {
-        let base = "\(exercise.name) — best set (\(exercise.measure.unit))"
-        return exercise.measure.lowerIsBetter ? base + " · lower is better" : base
+        switch exercise.measure {
+        case .weight: return "\(exercise.name) — est. 1RM (kg)"
+        case .assisted: return "\(exercise.name) — best set (\(exercise.measure.unit)) · lower is better"
+        case .bodyweight, .time: return "\(exercise.name) — best set (\(exercise.measure.unit))"
+        }
     }
 
     @ViewBuilder
@@ -221,6 +224,7 @@ struct ProgressTab: View {
         case .weight:
             parts.append(point.topWeight.map { "\(Format.weight($0)) kg" } ?? "—")
             if let reps = point.topReps { parts.append("\(reps) reps") }
+            if let max = point.bestEstimatedMax { parts.append("e1RM \(Format.weight((max * 10).rounded() / 10))") }
         case .assisted:
             parts.append(point.topWeight.map { "\(Format.weight($0)) kg assistance" } ?? "—")
             if let reps = point.topReps { parts.append("\(reps) reps") }

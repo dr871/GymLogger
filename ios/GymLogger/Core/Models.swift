@@ -118,6 +118,8 @@ struct SetEntry: Codable, Hashable, Identifiable {
     var weight: Double?
     var reps: Int?
     var done: Bool = false
+    /// Logged but never counted: not for progression, records or volume.
+    var warmup: Bool = false
 }
 
 struct SessionEntry: Codable, Hashable, Identifiable {
@@ -138,7 +140,18 @@ struct SessionEntry: Codable, Hashable, Identifiable {
 
     var doneSets: [SetEntry] { sets.filter(\.done) }
     var isComplete: Bool { !sets.isEmpty && doneSets.count == sets.count }
-    var hasWork: Bool { !doneSets.isEmpty }
+    /// The sets that count.
+    var workingSets: [SetEntry] { sets.filter { !$0.warmup } }
+    var doneWorkingSets: [SetEntry] { sets.filter { $0.done && !$0.warmup } }
+    /// A session of only warm-ups says nothing about what you can lift.
+    var hasWork: Bool { !doneWorkingSets.isEmpty }
+
+    /// The 0-based number of a working set among working sets; nil for a
+    /// warm-up. Used to number rows and to line up last session's sets.
+    func workingIndex(of setIndex: Int) -> Int? {
+        guard sets.indices.contains(setIndex), !sets[setIndex].warmup else { return nil }
+        return sets[..<setIndex].filter { !$0.warmup }.count
+    }
 
     var targetText: String { targetLabel(min: targetMin, max: targetMax, measure: measure) }
 
@@ -210,7 +223,9 @@ struct RestTimerState: Codable, Hashable {
 }
 
 struct AppData: Codable {
-    var version: Int = 1
+    /// 2: measures, rep ranges, muscles and warm-up sets. Decoding is forgiving
+    /// either way; this is for whoever writes the next migration.
+    var version: Int = 2
     var settings = Settings()
     /// Arrays rather than dictionaries: order is meaningful and deterministic.
     var exercises: [Exercise] = []

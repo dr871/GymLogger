@@ -24,7 +24,13 @@ struct HomeView: View {
                     } else if store.data.templates.isEmpty {
                         EmptyHint(text: "No workouts yet. Add a standard one, or build your own.")
                     } else {
-                        ForEach(store.data.templates) { template in
+                        // The one that's waited longest leads; the rest follow
+                        // in their usual order.
+                        let next = store.data.nextTemplateId
+                        let ordered = store.data.templates.sorted { a, b in
+                            (a.id == next ? 0 : 1) < (b.id == next ? 0 : 1)
+                        }
+                        ForEach(ordered) { template in
                             Button {
                                 store.startSession(templateId: template.id)
                                 showSession = true
@@ -32,12 +38,12 @@ struct HomeView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Start \(template.name)")
                                         .font(.system(size: 21, weight: .bold))
-                                    Text("\(template.items.count) exercise\(template.items.count == 1 ? "" : "s")")
+                                    Text(templateSubtitle(template, isNext: template.id == next))
                                         .font(.system(size: 14))
                                         .opacity(0.75)
                                 }
                             }
-                            .buttonStyle(BigButtonStyle(primary: template.id == store.data.templates.first?.id))
+                            .buttonStyle(BigButtonStyle(primary: template.id == next))
                         }
                     }
 
@@ -108,6 +114,19 @@ struct HomeView: View {
             }
             .screen()
         }
+    }
+
+    /// "5 exercises · last done Sat, 5 Sep", or "not done yet". With more than
+    /// one workout, the leading one says why it's up next.
+    private func templateSubtitle(_ template: WorkoutTemplate, isNext: Bool) -> String {
+        var parts = ["\(template.items.count) exercise\(template.items.count == 1 ? "" : "s")"]
+        if let last = store.data.lastFinished(templateId: template.id) {
+            parts.append("last done \(Format.date(last))")
+        } else if !store.data.finishedSessions.isEmpty {
+            parts.append("not done yet")
+        }
+        if isNext && store.data.templates.count > 1 { parts.append("up next") }
+        return parts.joined(separator: " · ")
     }
 
     /// Sets this week and last, once there is anything to say.

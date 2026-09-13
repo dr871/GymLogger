@@ -31,11 +31,14 @@ final class Store: ObservableObject {
         self.fileURL = url
         self.data = Store.load(from: url)
         UNUserNotificationCenter.current().delegate = notificationDelegate
+        // Loaded from the mirror (or seeded)? Put a live file back straight
+        // away rather than waiting for the next edit to do it.
+        if !FileManager.default.fileExists(atPath: url.path) { saveNow() }
     }
 
     // MARK: - Persistence
 
-    static func defaultFileURL() -> URL {
+    nonisolated static func defaultFileURL() -> URL {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory,
                                                  in: .userDomainMask,
                                                  appropriateFor: nil,
@@ -49,7 +52,7 @@ final class Store: ObservableObject {
     /// A copy of the live file, kept current, in the app's Documents folder —
     /// which iOS shows in the Files app under On My iPhone. The live file stays
     /// private in Application Support so a stray delete in Files costs nothing.
-    static func backupURL() -> URL? {
+    nonisolated static func backupURL() -> URL? {
         guard let docs = try? FileManager.default.url(for: .documentDirectory,
                                                       in: .userDomainMask,
                                                       appropriateFor: nil,
@@ -57,21 +60,33 @@ final class Store: ObservableObject {
         return docs.appendingPathComponent("GymLogger-backup.json")
     }
 
-    static func load(from url: URL) -> AppData {
-        guard let raw = try? Data(contentsOf: url) else { return .seed() }
+    /// The live file first; if that's missing or unreadable, the mirror kept in
+    /// Documents; only then the seed. One bad write must not cost the history
+    /// when an intact copy is sitting next door.
+    nonisolated static func load(from url: URL, mirror: URL? = Store.backupURL()) -> AppData {
+        if let data = read(url, setAsideIfCorrupt: true) { return data }
+        if let mirror, let data = read(mirror, setAsideIfCorrupt: false) { return data }
+        return .seed()
+    }
+
+    /// nil when the file is missing, empty, or can't be decoded.
+    nonisolated private static func read(_ url: URL, setAsideIfCorrupt: Bool) -> AppData? {
+        guard let raw = try? Data(contentsOf: url) else { return nil }
         do {
             var decoded = try AppData.decoder().decode(AppData.self, from: raw)
             decoded.pruneExpiredTimer()
             // An empty file is indistinguishable from a fresh install for the
-            // user, so give them the seeded workout rather than a blank app.
-            return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? .seed() : decoded
+            // user, so treat it as nothing rather than a blank app.
+            return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? nil : decoded
         } catch {
             // Unreadable: keep the original beside it rather than overwriting
             // the only copy of someone's training history.
-            let backup = url.deletingPathExtension().appendingPathExtension("corrupt.json")
-            try? FileManager.default.removeItem(at: backup)
-            try? FileManager.default.moveItem(at: url, to: backup)
-            return .seed()
+            if setAsideIfCorrupt {
+                let aside = url.deletingPathExtension().appendingPathExtension("corrupt.json")
+                try? FileManager.default.removeItem(at: aside)
+                try? FileManager.default.moveItem(at: url, to: aside)
+            }
+            return nil
         }
     }
 
@@ -184,6 +199,26 @@ final class Store: ObservableObject {
         data.sessions[s].entries[entryIndex].sets.append(
             SetEntry(weight: previous?.weight, reps: previous?.reps ?? entry.targetMin, done: false)
         )
+    }
+
+    func addWarmup(entryIndex: Int) {
+        guard let s = data.activeSessionIndex else { return }
+        data.addWarmup(sessionIndex: s, entryIndex: entryIndex)
+    }
+
+    func toggleWarmup(entryIndex: Int, setIndex: Int) {
+        guard let s = data.activeSessionIndex,
+              data.sessions[s].entries.indices.contains(entryIndex),
+              data.sessions[s].entries[entryIndex].sets.indices.contains(setIndex) else { return }
+        data.sessions[s].entries[entryIndex].sets[setIndex].warmup.toggle()
+    }
+
+    /// ± the exercise's increment on every set not yet ticked.
+    func stepWeight(entryIndex: Int, up: Bool) {
+        guard let s = data.activeSessionIndex,
+              data.sessions[s].entries.indices.contains(entryIndex) else { return }
+        let step = data.increment(for: data.sessions[s].entries[entryIndex].exerciseId)
+        data.adjustWeight(sessionIndex: s, entryIndex: entryIndex, by: up ? step : -step)
     }
 
     func removeSet(entryIndex: Int) {

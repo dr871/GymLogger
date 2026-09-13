@@ -104,7 +104,7 @@ extension AppData {
 
         for session in sessions {
             for entry in session.entries where entry.exerciseId == exerciseId {
-                for set in entry.doneSets {
+                for set in entry.doneWorkingSets {
                     guard let reps = set.reps, reps > 0 else { continue }
                     switch entry.measure {
                     case .weight:
@@ -148,7 +148,7 @@ extension AppData {
             guard let interval = calendar.dateInterval(of: .weekOfYear, for: session.startedAt),
                   let index = buckets.firstIndex(where: { $0.weekStart == interval.start }) else { continue }
             for entry in session.entries {
-                let count = entry.doneSets.count
+                let count = entry.doneWorkingSets.count
                 guard count > 0 else { continue }
                 if let muscle = exercise(id: entry.exerciseId)?.muscle {
                     buckets[index].sets[muscle, default: 0] += count

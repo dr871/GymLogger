@@ -1039,9 +1039,11 @@ final class MeasuredProgressTests: XCTestCase {
         XCTAssertEqual(Measure.time.unit, "s")
     }
 
-    func testWeightedWorkStillPlotsTheHeaviestSet() {
+    func testWeightedWorkKeepsTheHeaviestSetAndPlotsTheEstimatedMax() {
         var data = store(measure: .weight)
         log(&data, daysAgo: 1, sets: [(60, 8), (62.5, 8), (60, 8)])
-        XCTAssertEqual(data.progressSeries(for: data.exercises[0].id).map(\.value), [62.5])
+        let point = data.progressSeries(for: data.exercises[0].id)[0]
+        XCTAssertEqual(point.topWeight, 62.5)
+        XCTAssertEqual(point.value ?? 0, 62.5 * (1 + 8.0 / 30), accuracy: 0.01)
     }
 }

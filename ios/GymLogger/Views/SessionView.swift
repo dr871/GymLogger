@@ -8,6 +8,11 @@ struct SessionView: View {
     @State private var confirmDiscard = false
     @State private var confirmFinishEmpty = false
     @State private var showPicker = false
+    /// An exercise just added to today that the workout itself doesn't have.
+    /// Set once the picker has fully gone: presenting a dialog while a sheet
+    /// is still dismissing gets silently dropped.
+    @State private var offerToTemplate: String?
+    @State private var pendingOffer: String?
 
     var body: some View {
         Group {
@@ -45,11 +50,33 @@ struct SessionView: View {
                     .id(timer.notificationId)
             }
         }
-        .sheet(isPresented: $showPicker) {
+        .sheet(isPresented: $showPicker, onDismiss: {
+            offerToTemplate = pendingOffer
+            pendingOffer = nil
+        }) {
             ExercisePickerView { exerciseId in
                 store.addExerciseToSession(exerciseId: exerciseId)
+                if let templateId = store.activeSession?.templateId,
+                   store.data.template(id: templateId) != nil,
+                   !store.data.templateContains(templateId: templateId, exerciseId: exerciseId) {
+                    pendingOffer = exerciseId
+                }
                 showPicker = false
             }
+        }
+        .confirmationDialog(
+            "Also add \(offerToTemplate.flatMap { store.exercise(id: $0)?.name } ?? "it") to \(store.activeSession?.name ?? "the workout")?",
+            isPresented: Binding(get: { offerToTemplate != nil }, set: { if !$0 { offerToTemplate = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Add to the workout") {
+                if let exerciseId = offerToTemplate, let templateId = store.activeSession?.templateId {
+                    store.data.addToTemplate(templateId: templateId, exerciseId: exerciseId)
+                }
+            }
+            Button("Just today", role: .cancel) {}
+        } message: {
+            Text("It's in today's session either way. Adding it to the workout means it's there next time too.")
         }
         .alert("Discard this session?", isPresented: $confirmDiscard) {
             Button("Discard", role: .destructive) {
@@ -124,6 +151,8 @@ struct ExerciseCardView: View {
     /// tapping the count badge opens it back up.
     @State private var expanded = false
     @State private var confirmRemove = false
+    /// A running hold on one timed set: tap ▶ to start, ■ to write the seconds.
+    @State private var hold: (setIndex: Int, start: Date)?
 
     private var showsRows: Bool { !entry.isComplete || expanded }
 
@@ -198,7 +227,7 @@ struct ExerciseCardView: View {
                     Text(entry.name)
                         .font(.system(size: 19, weight: .bold))
                         .foregroundStyle(Palette.text)
-                    Text("\(entry.sets.count) × \(entry.targetText) · rest \(store.data.restSec(for: entry.exerciseId))s")
+                    Text("\(entry.workingSets.count) × \(entry.targetText)\(entry.sets.count > entry.workingSets.count ? " + warm-up" : "") · rest \(store.data.restSec(for: entry.exerciseId))s")
                         .font(.system(size: 13))
                         .foregroundStyle(Palette.muted)
                 }
@@ -282,20 +311,31 @@ struct ExerciseCardView: View {
     private var setRows: some View {
         VStack(spacing: 8) {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
+                let working = entry.workingIndex(of: setIndex)
                 HStack(spacing: 6) {
-                    Text("\(setIndex + 1)")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Palette.ghost)
-                        .frame(width: 20)
+                    // The set number doubles as the warm-up toggle: "W" sets
+                    // are logged but don't count for anything.
+                    Button {
+                        store.toggleWarmup(entryIndex: entryIndex, setIndex: setIndex)
+                    } label: {
+                        Text(working.map { "\($0 + 1)" } ?? "W")
+                            .font(.system(size: 14, weight: set.warmup ? .semibold : .regular))
+                            .foregroundStyle(set.warmup ? Palette.warn : Palette.ghost)
+                            .frame(width: 24, height: Metrics.tap)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(set.done)
+                    .accessibilityLabel(set.warmup ? "Warm-up set. Make it a working set" : "Working set \((working ?? 0) + 1). Make it a warm-up")
 
-                    // Last session, greyed out, right beside today's fields.
-                    Text(Format.lastSet(lastEntry?.entry.sets[safe: setIndex], measure: entry.measure))
+                    // Last session's matching working set, greyed out beside
+                    // today's fields. Warm-ups don't line up with anything.
+                    Text(set.warmup ? "warm-up" : Format.lastSet(working.flatMap { lastEntry?.entry.workingSets[safe: $0] }, measure: entry.measure))
                         .font(.system(size: 14))
                         .monospacedDigit()
                         .foregroundStyle(Palette.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                        .frame(minWidth: 92, alignment: .leading)
+                        .frame(minWidth: 88, alignment: .leading)
 
                     // Nothing to log for pull-ups or a plank, so no empty box.
                     if entry.measure.usesWeight {
@@ -303,14 +343,48 @@ struct ExerciseCardView: View {
                                     placeholder: entry.measure == .assisted ? "assist" : "kg")
                     }
 
-                    RepsField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps,
-                              placeholder: entry.measure.repsNoun)
-                        .frame(maxWidth: 72)
+                    if entry.measure == .time, let hold, hold.setIndex == setIndex {
+                        // Counting up in place of the field until ■ is tapped.
+                        TimelineView(.periodic(from: hold.start, by: 1)) { context in
+                            let elapsed = Int(context.date.timeIntervalSince(hold.start).rounded(.down))
+                            Text("\(elapsed)s")
+                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.accent)
+                                .frame(maxWidth: 72, minHeight: Metrics.tap)
+                                .onChange(of: elapsed) { _, now in
+                                    if now == set.reps { Haptics.done() }   // reached the target
+                                }
+                        }
+                        Button {
+                            let seconds = Int(Date().timeIntervalSince(hold.start).rounded())
+                            store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps = max(1, seconds)
+                            self.hold = nil
+                        } label: {
+                            Image(systemName: "stop.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .frame(width: Metrics.tap, height: Metrics.tap)
+                        }
+                        .buttonStyle(ChipStyle(filled: true))
+                        .accessibilityLabel("Stop the hold and log the seconds")
+                    } else {
+                        RepsField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps,
+                                  placeholder: entry.measure.repsNoun)
+                            .frame(maxWidth: 72)
 
-                    if entry.measure == .time {
-                        Text("s")
-                            .font(.system(size: 15))
-                            .foregroundStyle(Palette.muted)
+                        if entry.measure == .time {
+                            Button {
+                                hideKeyboard()
+                                hold = (setIndex, Date())
+                            } label: {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .frame(width: Metrics.tap, height: Metrics.tap)
+                            }
+                            .buttonStyle(ChipStyle())
+                            .disabled(set.done || hold != nil)
+                            .accessibilityLabel("Start timing this hold")
+                        }
                     }
 
                     TickButton(done: set.done, enabled: set.done || entry.canComplete(setIndex: setIndex)) {
@@ -363,7 +437,18 @@ struct ExerciseCardView: View {
     private var footer: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                if entry.measure.usesWeight {
+                    let step = Format.weight(store.data.increment(for: entry.exerciseId))
+                    Button("−\(step)") { store.stepWeight(entryIndex: entryIndex, up: false) }
+                        .buttonStyle(ChipStyle())
+                        .accessibilityLabel("\(step) kg less on every set not yet done")
+                    Button("+\(step)") { store.stepWeight(entryIndex: entryIndex, up: true) }
+                        .buttonStyle(ChipStyle())
+                        .accessibilityLabel("\(step) kg more on every set not yet done")
+                }
                 Button("+ Set") { store.addSet(entryIndex: entryIndex) }
+                    .buttonStyle(ChipStyle())
+                Button("+ Warm-up") { store.addWarmup(entryIndex: entryIndex) }
                     .buttonStyle(ChipStyle())
                 Button("− Set") { store.removeSet(entryIndex: entryIndex) }
                     .buttonStyle(ChipStyle())
