@@ -90,9 +90,10 @@ struct TemplateEditorView: View {
                         HStack(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Sets").font(.system(size: 13)).foregroundStyle(Palette.muted)
+                                let sets = itemBinding(index, itemIndex, \.sets, fallback: 0)
                                 RepsField(value: Binding(
-                                    get: { store.data.templates[index].items[itemIndex].sets },
-                                    set: { if let v = $0 { store.data.templates[index].items[itemIndex].sets = v } }
+                                    get: { sets.wrappedValue },
+                                    set: { if let v = $0 { sets.wrappedValue = v } }
                                 ), placeholder: "3")
                             }
                             let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
@@ -100,10 +101,10 @@ struct TemplateEditorView: View {
                                 Text(measure == .time ? "Secs, min–max" : "Reps, min–max")
                                     .font(.system(size: 13)).foregroundStyle(Palette.muted)
                                 HStack(spacing: 6) {
-                                    RepsField(value: $store.data.templates[index].items[itemIndex].targetMin,
+                                    RepsField(value: itemBinding(index, itemIndex, \.targetMin, fallback: nil),
                                               placeholder: "\(measure.defaultTarget.min)")
                                     Text("–").foregroundStyle(Palette.ghost)
-                                    RepsField(value: $store.data.templates[index].items[itemIndex].targetMax,
+                                    RepsField(value: itemBinding(index, itemIndex, \.targetMax, fallback: nil),
                                               placeholder: "\(measure.defaultTarget.max)")
                                 }
                             }
@@ -145,6 +146,27 @@ struct TemplateEditorView: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 24)
         }
+    }
+
+    /// A binding to one field of one exercise row that tolerates the row having
+    /// just been removed. Rows here are identified by position, and SwiftUI can
+    /// refresh a row's fields once more after its item is gone — a plain
+    /// subscript then traps on the stale index. Same hazard ExerciseCardView
+    /// guards against with `indicesAreValid`.
+    private func itemBinding<T>(_ index: Int, _ itemIndex: Int,
+                                _ field: WritableKeyPath<TemplateItem, T>, fallback: T) -> Binding<T> {
+        Binding(
+            get: {
+                guard store.data.templates.indices.contains(index),
+                      store.data.templates[index].items.indices.contains(itemIndex) else { return fallback }
+                return store.data.templates[index].items[itemIndex][keyPath: field]
+            },
+            set: { newValue in
+                guard store.data.templates.indices.contains(index),
+                      store.data.templates[index].items.indices.contains(itemIndex) else { return }
+                store.data.templates[index].items[itemIndex][keyPath: field] = newValue
+            }
+        )
     }
 
     private func itemSubtitle(_ item: TemplateItem) -> String {
