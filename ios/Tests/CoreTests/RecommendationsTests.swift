@@ -4,6 +4,8 @@ import XCTest
 private struct Rig {
     var data = AppData()
     let exerciseId: String
+    /// What "days ago" counts back from.
+    var now = Date()
 
     init(measure: Measure = .weight, range: (Int, Int) = (8, 12), muscle: MuscleGroup? = .legs) {
         let exercise = Exercise(name: "X", measure: measure, muscle: muscle)
@@ -19,7 +21,7 @@ private struct Rig {
     mutating func log(daysAgo: Int, warmups: [(Double?, Int)] = [], _ sets: [(Double?, Int)]) -> String {
         data.startSession(templateId: data.templates[0].id)
         let i = data.activeSessionIndex!
-        let start = Date().addingTimeInterval(TimeInterval(-daysAgo * 86_400))
+        let start = now.addingTimeInterval(TimeInterval(-daysAgo * 86_400))
         data.sessions[i].startedAt = start
         data.sessions[i].entries[0].sets =
             warmups.map { SetEntry(weight: $0.0, reps: $0.1, done: true, warmup: true) }
@@ -50,11 +52,12 @@ final class WarmupSetTests: XCTestCase {
 
     func testWarmupsAreLeftOutOfRecordsVolumeAndProgress() {
         var r = Rig()
+        r.now = fixedWednesday
         r.log(daysAgo: 2, warmups: [(200, 1)], [(80, 10), (80, 10)])
 
         XCTAssertEqual(r.data.personalRecords(for: r.exerciseId).first { $0.kind == .heaviest }?.value, 80)
         var monday = Calendar(identifier: .iso8601); monday.firstWeekday = 2
-        XCTAssertEqual(r.data.weeklyVolume(weeks: 1, calendar: monday)[0].totalSets, 2)
+        XCTAssertEqual(r.data.weeklyVolume(weeks: 1, endingAt: fixedWednesday, calendar: monday)[0].totalSets, 2)
         XCTAssertEqual(r.data.progressSeries(for: r.exerciseId).first?.topWeight, 80)
     }
 

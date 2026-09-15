@@ -1,11 +1,21 @@
 import XCTest
 @testable import GymLoggerCore
 
+/// Weekly volume depends on which calendar week a session falls in, so these
+/// tests can't use the real clock: "2 days ago" is last week every Monday and
+/// Tuesday. They all run as if it were Wednesday 16 Sept 2026, midday.
+let fixedWednesday: Date = {
+    let c = Calendar(identifier: .iso8601)
+    return c.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 12))!
+}()
+
 /// One exercise, one template, and a way to log finished sessions on given
 /// days with given per-set numbers.
 private struct Bench {
     var data = AppData()
     let exerciseId: String
+    /// What "days ago" counts back from.
+    var now = Date()
 
     init(measure: Measure, muscle: MuscleGroup? = .legs) {
         var exercise = Exercise(name: "X", measure: measure)
@@ -21,7 +31,7 @@ private struct Bench {
     mutating func log(daysAgo: Int, _ sets: [(Double?, Int)], done: Bool = true) -> String {
         data.startSession(templateId: data.templates[0].id)
         let i = data.activeSessionIndex!
-        let start = Date().addingTimeInterval(TimeInterval(-daysAgo * 86_400))
+        let start = now.addingTimeInterval(TimeInterval(-daysAgo * 86_400))
         data.sessions[i].startedAt = start
         data.sessions[i].entries[0].sets = sets.map { SetEntry(weight: $0.0, reps: $0.1, done: done) }
         data.finishSession(at: start.addingTimeInterval(3600))
@@ -115,10 +125,11 @@ final class WeeklyVolumeTests: XCTestCase {
 
     func testSetsAreCountedPerMusclePerWeek() {
         var b = Bench(measure: .weight, muscle: .legs)
+        b.now = fixedWednesday
         b.log(daysAgo: 1, [(80, 10), (80, 10), (80, 10)])
         b.log(daysAgo: 2, [(80, 10), (80, 10)])
 
-        let weeks = b.data.weeklyVolume(weeks: 1, calendar: monday)
+        let weeks = b.data.weeklyVolume(weeks: 1, endingAt: fixedWednesday, calendar: monday)
         XCTAssertEqual(weeks.count, 1)
         XCTAssertEqual(weeks[0].sets[.legs], 5)
         XCTAssertEqual(weeks[0].totalSets, 5)
@@ -126,14 +137,16 @@ final class WeeklyVolumeTests: XCTestCase {
 
     func testOnlyTickedSetsCountTowardsVolume() {
         var b = Bench(measure: .weight, muscle: .chest)
+        b.now = fixedWednesday
         b.log(daysAgo: 1, [(80, 10), (80, 10)], done: false)
-        XCTAssertEqual(b.data.weeklyVolume(weeks: 1, calendar: monday)[0].totalSets, 0)
+        XCTAssertEqual(b.data.weeklyVolume(weeks: 1, endingAt: fixedWednesday, calendar: monday)[0].totalSets, 0)
     }
 
     func testEmptyWeeksAreIncludedSoAChartIsContinuous() {
         var b = Bench(measure: .weight, muscle: .back)
+        b.now = fixedWednesday
         b.log(daysAgo: 21, [(60, 10)])
-        let weeks = b.data.weeklyVolume(weeks: 4, calendar: monday)
+        let weeks = b.data.weeklyVolume(weeks: 4, endingAt: fixedWednesday, calendar: monday)
         XCTAssertEqual(weeks.count, 4)
         XCTAssertTrue(weeks[0].weekStart < weeks[3].weekStart, "oldest first")
         XCTAssertEqual(weeks.map(\.totalSets).reduce(0, +), 1)
@@ -149,8 +162,9 @@ final class WeeklyVolumeTests: XCTestCase {
 
     func testAnExerciseWithoutAMuscleIsCountedAsUnassigned() {
         var b = Bench(measure: .weight, muscle: nil)
+        b.now = fixedWednesday
         b.log(daysAgo: 1, [(80, 10), (80, 10)])
-        let week = b.data.weeklyVolume(weeks: 1, calendar: monday)[0]
+        let week = b.data.weeklyVolume(weeks: 1, endingAt: fixedWednesday, calendar: monday)[0]
         XCTAssertTrue(week.sets.isEmpty)
         XCTAssertEqual(week.unassignedSets, 2)
         XCTAssertEqual(week.totalSets, 2)
@@ -158,9 +172,10 @@ final class WeeklyVolumeTests: XCTestCase {
 
     func testTheMuscleIsReadFromTheExerciseNotSnapshotted() {
         var b = Bench(measure: .weight, muscle: .legs)
+        b.now = fixedWednesday
         b.log(daysAgo: 1, [(80, 10)])
         b.data.exercises[0].muscle = .core
-        XCTAssertEqual(b.data.weeklyVolume(weeks: 1, calendar: monday)[0].sets[.core], 1,
+        XCTAssertEqual(b.data.weeklyVolume(weeks: 1, endingAt: fixedWednesday, calendar: monday)[0].sets[.core], 1,
                        "recategorising an exercise moves its whole history — that's the point")
     }
 }
