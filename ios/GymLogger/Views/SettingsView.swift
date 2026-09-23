@@ -4,8 +4,16 @@ import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @EnvironmentObject var store: Store
-    @State private var exportURL: URL?
-    @State private var showShare = false
+    /// The file to share, carried into the sheet by `.sheet(item:)`. With
+    /// `isPresented` the sheet's content closure is captured before the new
+    /// URL lands, so it opened empty with nothing to share.
+    @State private var pendingExport: ExportFile?
+    @State private var exportError: String?
+
+    struct ExportFile: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
     @State private var showImporter = false
     @State private var pendingRestore: Store.PendingRestore?
     @State private var confirmRestore = false
@@ -76,8 +84,13 @@ struct SettingsView: View {
                         .foregroundStyle(Palette.muted)
 
                     Button("Export all data (JSON)") {
-                        exportURL = store.exportFile()
-                        showShare = exportURL != nil
+                        if let url = store.exportFile() {
+                            pendingExport = ExportFile(url: url)
+                        } else {
+                            // Never fail silently: the whole point of this
+                            // button is getting the history off the phone.
+                            exportError = "The backup file couldn't be written. Free up some space and try again."
+                        }
                     }
                     .buttonStyle(BigButtonStyle())
 
@@ -109,12 +122,18 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .screen()
-            .sheet(isPresented: $showShare) {
-                if let exportURL {
-                    ShareSheet(items: [exportURL]) { completed in
-                        if completed { store.markExported() }
-                    }
+            .sheet(item: $pendingExport) { export in
+                ShareSheet(items: [export.url]) { completed in
+                    if completed { store.markExported() }
                 }
+            }
+            .alert("Can't export", isPresented: Binding(
+                get: { exportError != nil },
+                set: { if !$0 { exportError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(exportError ?? "")
             }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
                 switch result {
