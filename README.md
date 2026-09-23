@@ -230,9 +230,17 @@ wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
-The SwiftUI layer has no automated coverage. It builds clean with Xcode 26 and
-has been exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), but not yet
-on physical hardware.
+The SwiftUI layer has no automated coverage. It builds clean with Xcode 26, is
+exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), and now runs on a
+physical iPhone on iOS 27, sideloaded with SideStore.
+
+Running it on a phone is what found the first two view-layer bugs, both of them
+in code that had been written but never actually run: removing an exercise from
+a workout crashed on a stale row index, and Export opened an empty share sheet
+because the sheet was built before the file's URL had landed. Neither was
+reachable from the logic tests. If the UI misbehaves, reproduce it on the
+simulator first — both bugs reproduced there every time once the exact tap was
+known.
 
 `ios/project.yml` regenerates an equivalent Xcode project via
 `brew install xcodegen && xcodegen generate` if the checked-in one ever goes
