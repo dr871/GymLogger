@@ -34,14 +34,14 @@ struct SessionView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Finish") { finish() }
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.app(17, weight: .bold))
                     .foregroundStyle(Palette.accent)
             }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 // decimalPad has no return key, so give the user a way out.
                 Button("Done") { hideKeyboard() }
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
             }
         }
         .safeAreaInset(edge: .bottom) {
@@ -104,7 +104,7 @@ struct SessionView: View {
             LazyVStack(spacing: 12) {
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     Text("Started \(Format.time(startedAt)) · \(Format.duration(context.date.timeIntervalSince(startedAt)))")
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 2)
@@ -153,6 +153,10 @@ struct ExerciseCardView: View {
     @State private var confirmRemove = false
     /// A running hold on one timed set: tap ▶ to start, ■ to write the seconds.
     @State private var hold: (setIndex: Int, start: Date)?
+    @Environment(\.dynamicTypeSize) private var typeSize
+    /// Set-row boxes grow with the text size so nothing clips.
+    @ScaledMetric private var numberColumn: CGFloat = 24
+    @ScaledMetric private var repsWidth: CGFloat = 72
 
     private var showsRows: Bool { !entry.isComplete || expanded }
 
@@ -190,7 +194,7 @@ struct ExerciseCardView: View {
             // the whole point of recording them — but drops an empty field.
             if showsRows || !entry.note.isEmpty {
                 TextField("Machine settings (e.g. seat 4, handles 2)", text: noteBinding)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Palette.warn)
                     .padding(.vertical, 10)
                     .frame(minHeight: 44)
@@ -225,10 +229,10 @@ struct ExerciseCardView: View {
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
-                        .font(.system(size: 19, weight: .bold))
+                        .font(.app(19, weight: .bold))
                         .foregroundStyle(Palette.text)
                     Text("\(entry.workingSets.count) × \(entry.targetText)\(entry.sets.count > entry.workingSets.count ? " + warm-up" : "") · rest \(store.data.restSec(for: entry.exerciseId))s")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -244,10 +248,10 @@ struct ExerciseCardView: View {
                         .monospacedDigit()
                     if entry.isComplete {
                         Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.app(11, weight: .semibold))
                     }
                 }
-                .font(.system(size: 13))
+                .font(.app(13))
                 .foregroundStyle(Palette.muted)
                 .padding(.horizontal, 11)
                 .frame(minHeight: 44)
@@ -296,7 +300,7 @@ struct ExerciseCardView: View {
             }
             .buttonStyle(ChipStyle())
         }
-        .font(.system(size: 14))
+        .font(.app(14))
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Palette.accent.opacity(0.10))
@@ -312,16 +316,17 @@ struct ExerciseCardView: View {
         VStack(spacing: 8) {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
                 let working = entry.workingIndex(of: setIndex)
-                HStack(spacing: 6) {
+                AdaptiveRow(spacing: 6) {
+                  HStack(spacing: 6) {
                     // The set number doubles as the warm-up toggle: "W" sets
                     // are logged but don't count for anything.
                     Button {
                         store.toggleWarmup(entryIndex: entryIndex, setIndex: setIndex)
                     } label: {
                         Text(working.map { "\($0 + 1)" } ?? "W")
-                            .font(.system(size: 14, weight: set.warmup ? .semibold : .regular))
+                            .font(.app(14, weight: set.warmup ? .semibold : .regular))
                             .foregroundStyle(set.warmup ? Palette.warn : Palette.ghost)
-                            .frame(width: 24, height: Metrics.tap)
+                            .frame(width: numberColumn, height: Metrics.tap)
                     }
                     .buttonStyle(.plain)
                     .disabled(set.done)
@@ -330,12 +335,15 @@ struct ExerciseCardView: View {
                     // Last session's matching working set, greyed out beside
                     // today's fields. Warm-ups don't line up with anything.
                     Text(set.warmup ? "warm-up" : Format.lastSet(working.flatMap { lastEntry?.entry.workingSets[safe: $0] }, measure: entry.measure))
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .monospacedDigit()
                         .foregroundStyle(Palette.muted)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .frame(minWidth: 88, alignment: .leading)
+                  }
+
+                  HStack(spacing: 6) {
 
                     // Nothing to log for pull-ups or a plank, so no empty box.
                     if entry.measure.usesWeight {
@@ -348,10 +356,10 @@ struct ExerciseCardView: View {
                         TimelineView(.periodic(from: hold.start, by: 1)) { context in
                             let elapsed = Int(context.date.timeIntervalSince(hold.start).rounded(.down))
                             Text("\(elapsed)s")
-                                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                                .font(.app(18, weight: .semibold, design: .rounded))
                                 .monospacedDigit()
                                 .foregroundStyle(Palette.accent)
-                                .frame(maxWidth: 72, minHeight: Metrics.tap)
+                                .frame(maxWidth: repsWidth, minHeight: Metrics.tap)
                                 .onChange(of: elapsed) { _, now in
                                     if now == set.reps { Haptics.done() }   // reached the target
                                 }
@@ -362,7 +370,7 @@ struct ExerciseCardView: View {
                             self.hold = nil
                         } label: {
                             Image(systemName: "stop.fill")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.app(16, weight: .semibold))
                                 .frame(width: Metrics.tap, height: Metrics.tap)
                         }
                         .buttonStyle(ChipStyle(filled: true))
@@ -370,7 +378,7 @@ struct ExerciseCardView: View {
                     } else {
                         RepsField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].reps,
                                   placeholder: entry.measure.repsNoun)
-                            .frame(maxWidth: 72)
+                            .frame(maxWidth: repsWidth)
 
                         if entry.measure == .time {
                             Button {
@@ -378,7 +386,7 @@ struct ExerciseCardView: View {
                                 hold = (setIndex, Date())
                             } label: {
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.app(16, weight: .semibold))
                                     .frame(width: Metrics.tap, height: Metrics.tap)
                             }
                             .buttonStyle(ChipStyle())
@@ -390,13 +398,14 @@ struct ExerciseCardView: View {
                     TickButton(done: set.done, enabled: set.done || entry.canComplete(setIndex: setIndex)) {
                         store.toggleSet(entryIndex: entryIndex, setIndex: setIndex)
                     }
+                  }
                 }
                 .opacity(set.done ? 0.75 : 1)
             }
 
             if let blocked = blockedReason {
                 Text(blocked)
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 2)
@@ -477,7 +486,7 @@ struct TickButton: View {
 
                 if done {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 20, weight: .bold))
+                        .font(.app(20, weight: .bold))
                         .foregroundStyle(Palette.accentInk)
                 } else {
                     // An empty square reads as a disabled field; a ring reads

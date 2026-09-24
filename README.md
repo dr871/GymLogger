@@ -146,6 +146,11 @@ countdown itself is stored as an absolute end time and rendered from the wall
 clock, so it can't drift or stall. Length is per-exercise and takes effect
 immediately, even mid-session.
 
+**Text follows the phone's text-size setting** (Settings › Display & Brightness
+› Text Size, and the accessibility sizes). Rows of fields — a set's weight and
+reps, a workout's sets and rep range, the reorder buttons — stack vertically at
+the accessibility sizes rather than squeezing to "…".
+
 **During a session the screen stays awake**, so a phone on the bench doesn't
 need unlocking between sets. Only while the session screen is showing.
 

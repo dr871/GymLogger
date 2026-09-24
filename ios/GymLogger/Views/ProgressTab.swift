@@ -29,7 +29,7 @@ struct ProgressTab: View {
 
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(chartTitle(exercise))
-                                    .font(.system(size: 14))
+                                    .font(.app(14))
                                     .foregroundStyle(Palette.muted)
 
                                 chart(series: series)
@@ -43,10 +43,10 @@ struct ProgressTab: View {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(Format.date(point.date))
-                                            .font(.system(size: 17, weight: .semibold))
+                                            .font(.app(17, weight: .semibold))
                                             .foregroundStyle(Palette.text)
                                         Text(rowSubtitle(point))
-                                            .font(.system(size: 14))
+                                            .font(.app(14))
                                             .foregroundStyle(Palette.muted)
                                     }
                                     Spacer()
@@ -80,14 +80,14 @@ struct ProgressTab: View {
                 ForEach(records) { record in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(record.kind.title)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Palette.muted)
                         Text(record.text(measure: exercise.measure))
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.app(16, weight: .semibold))
                             .monospacedDigit()
                             .foregroundStyle(Palette.text)
                         Text(Format.date(record.date))
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Palette.ghost)
                     }
                     .padding(.horizontal, 12)
@@ -112,12 +112,12 @@ struct ProgressTab: View {
 
         return VStack(alignment: .leading, spacing: 8) {
             Text("Sets per muscle — last 8 weeks")
-                .font(.system(size: 14))
+                .font(.app(14))
                 .foregroundStyle(Palette.muted)
 
             if series.isEmpty {
                 Text("Nothing logged in the last eight weeks.")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Palette.muted)
                     .padding(.vertical, 12)
             } else {
@@ -148,7 +148,7 @@ struct ProgressTab: View {
 
                 if let now = weeks.last {
                     Text("This week: \(Format.muscleBreakdown(now))")
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Palette.muted)
                 }
             }
@@ -187,7 +187,7 @@ struct ProgressTab: View {
 
         if points.isEmpty {
             Text("No data yet — log this exercise and it will show up here.")
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(Palette.muted)
                 .padding(.vertical, 20)
         } else {
