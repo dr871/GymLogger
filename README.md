@@ -209,6 +209,7 @@ sheet.
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
 | `ios/Tests/CoreTests/` | 170 unit tests over the logic layer |
+| `ios/UITests/` | 6 screen tests driving the real UI |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
@@ -254,9 +255,24 @@ wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
-The SwiftUI layer has no automated coverage. It builds clean with Xcode 26, is
-exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), and now runs on a
-physical iPhone on iOS 27, sideloaded with SideStore.
+Six **screen tests** drive the real UI through the flows that matter, in
+`ios/UITests/`:
+
+```sh
+cd ios && xcodebuild test -project GymLogger.xcodeproj -scheme GymLogger \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+They cover logging a set (a set can't be ticked until it's logged, and can once
+it is), finishing a session and finding it in History, sharing it, removing an
+exercise from a workout, adding one from the catalogue, and Export offering the
+backup file. The last three are regression tests for bugs found on a phone.
+Each launches with `--uitest-reset`, so it starts from the seeded workout in a
+throwaway file and never touches real data.
+
+That leaves the rest of the SwiftUI layer without automated coverage. It builds
+clean with Xcode 26, is exercised by hand on an iPhone 17 Pro simulator
+(iOS 26.5), and runs on a physical iPhone on iOS 27, sideloaded with SideStore.
 
 Running it on a phone is what found the first two view-layer bugs, both of them
 in code that had been written but never actually run: removing an exercise from

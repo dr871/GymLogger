@@ -120,6 +120,7 @@ struct SessionView: View {
                 // over — not under your thumb at the top all session.
                 Button("Finish workout") { finish() }
                     .buttonStyle(BigButtonStyle(primary: true))
+                    .accessibilityIdentifier("finishWorkout")
                     .padding(.top, 8)
 
                 Button("Discard this session") { confirmDiscard = true }
@@ -262,6 +263,8 @@ struct ExerciseCardView: View {
             .buttonStyle(.plain)
             .disabled(!entry.isComplete)
             .accessibilityLabel(entry.isComplete ? (expanded ? "Collapse sets" : "Show sets") : "Sets done")
+            .accessibilityValue("\(entry.doneSets.count)/\(entry.sets.count)")
+            .accessibilityIdentifier("setCount-\(entry.name)")
         }
     }
 
@@ -350,6 +353,7 @@ struct ExerciseCardView: View {
                     if entry.measure.usesWeight {
                         WeightField(value: $store.data.sessions[sessionIndex].entries[entryIndex].sets[setIndex].weight,
                                     placeholder: entry.measure == .assisted ? "assist" : "kg")
+                            .accessibilityIdentifier("weight-\(entry.name)-\(setIndex)")
                     }
 
                     if entry.measure == .time, let hold, hold.setIndex == setIndex {

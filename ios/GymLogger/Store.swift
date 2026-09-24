@@ -27,9 +27,16 @@ final class Store: ObservableObject {
     private var saveTask: Task<Void, Never>?
     private let notificationDelegate = NotificationDelegate()
 
+    /// UI tests pass --uitest-reset so each run starts from the seeded workout
+    /// in a throwaway file, and never touches real data or the Files-app copy.
+    static var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-reset")
+    }
+
     init(fileURL: URL? = nil) {
-        let url = fileURL ?? Store.defaultFileURL()
-        self.file = DataFile(url: url, mirror: Store.backupURL())
+        let testing = Store.isUITesting
+        let url = fileURL ?? (testing ? Store.throwawayFileURL() : Store.defaultFileURL())
+        self.file = DataFile(url: url, mirror: testing ? nil : Store.backupURL())
         self.data = file.load()
         UNUserNotificationCenter.current().delegate = notificationDelegate
         // Loaded from the mirror (or seeded)? Put a live file back straight
@@ -47,6 +54,12 @@ final class Store: ObservableObject {
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return base
             .appendingPathComponent("GymLogger", isDirectory: true)
+            .appendingPathComponent("data.json")
+    }
+
+    nonisolated static func throwawayFileURL() -> URL {
+        URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("uitest-\(UUID().uuidString)", isDirectory: true)
             .appendingPathComponent("data.json")
     }
 
