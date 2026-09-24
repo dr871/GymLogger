@@ -68,22 +68,97 @@ extension AppData {
     }
 
     /// Records first achieved in this session: strictly better than every
-    /// session before it. A first session sets them all — that's the baseline.
+    /// session before it.
+    ///
+    /// At most one per exercise, and nothing at all for an exercise's first
+    /// session — a baseline isn't a record, and celebrating every kind for
+    /// every exercise buried the one line that mattered. `.heaviest` is the
+    /// headline where there is one; otherwise the estimate carries it, which
+    /// is what catches more reps at the same weight.
     func recordsSet(in sessionId: String) -> [(exerciseId: String, record: PersonalRecord)] {
         guard let session = sessions.first(where: { $0.id == sessionId }), session.isFinished else { return [] }
         let earlier = finishedSessions.filter { $0.startedAt < session.startedAt && $0.id != sessionId }
+        let headline: [RecordKind] = [.heaviest, .leastAssistance, .mostReps, .longestHold, .estimatedMax]
 
         var out: [(exerciseId: String, record: PersonalRecord)] = []
-        for exerciseId in Set(session.entries.filter(\.hasWork).map(\.exerciseId)) {
-            let previous = bestRecords(in: earlier, for: exerciseId)
-            for record in bestRecords(in: [session], for: exerciseId) {
-                let old = previous.first { $0.kind == record.kind }
-                let lowerIsBetter = record.kind == .leastAssistance
-                let beaten = old.map { lowerIsBetter ? record.value < $0.value : record.value > $0.value } ?? true
-                if beaten { out.append((exerciseId, record)) }
+        for entry in session.entries where entry.hasWork {
+            guard !out.contains(where: { $0.exerciseId == entry.exerciseId }) else { continue }
+            let previous = bestRecords(in: earlier, for: entry.exerciseId)
+            guard !previous.isEmpty else { continue }   // first time — nothing to beat
+
+            let beaten = bestRecords(in: [session], for: entry.exerciseId).filter { record in
+                guard let old = previous.first(where: { $0.kind == record.kind }) else { return false }
+                return record.kind == .leastAssistance ? record.value < old.value : record.value > old.value
+            }
+            if let best = headline.compactMap({ kind in beaten.first { $0.kind == kind } }).first {
+                out.append((entry.exerciseId, best))
             }
         }
-        return out.sorted { $0.record.kind.rawValue < $1.record.kind.rawValue }
+        return out
+    }
+
+    // MARK: - Sharing
+
+    /// A plain-text summary of a finished session, for sending to someone who
+    /// asked what you did. Warm-ups and un-ticked sets are left out, as is any
+    /// exercise that wasn't actually logged.
+    func shareText(for sessionId: String, calendar: Calendar = .current) -> String? {
+        guard let session = sessions.first(where: { $0.id == sessionId }), session.isFinished else { return nil }
+
+        let date = DateFormatter()
+        date.calendar = calendar
+        date.locale = .current
+        date.setLocalizedDateFormatFromTemplate("EEE d MMM")
+
+        var lines = ["\(session.name) — \(date.string(from: session.startedAt))"]
+
+        var totals: [String] = []
+        if let duration = session.duration {
+            totals.append("\(Int((duration / 60).rounded())) min")
+        }
+        let sets = session.entries.reduce(0) { $0 + $1.doneWorkingSets.count }
+        totals.append("\(sets) set\(sets == 1 ? "" : "s")")
+        lines.append(totals.joined(separator: " · "))
+        lines.append("")
+
+        for entry in session.entries where entry.hasWork {
+            lines.append("\(entry.name) — \(Self.setsText(entry))")
+        }
+
+        let records = recordsSet(in: sessionId)
+        if !records.isEmpty {
+            lines.append("")
+            for hit in records {
+                let name = session.entries.first { $0.exerciseId == hit.exerciseId }?.name ?? "Exercise"
+                let measure = session.entries.first { $0.exerciseId == hit.exerciseId }?.measure ?? .weight
+                lines.append("Best yet: \(name) \(hit.record.text(measure: measure))")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// "80 kg × 12, 12, 11" while the weight holds, "80 kg × 12, 82.5 kg × 10"
+    /// when it changes, and just the reps or seconds where there is no weight.
+    private static func setsText(_ entry: SessionEntry) -> String {
+        let done = entry.doneWorkingSets
+        func kg(_ v: Double?) -> String {
+            guard let v else { return "—" }
+            let n = v == v.rounded() ? "\(Int(v))" : "\(v)"
+            return entry.measure == .assisted ? "\(n) kg assist" : "\(n) kg"
+        }
+
+        switch entry.measure {
+        case .time:
+            return done.map { "\($0.reps ?? 0)s" }.joined(separator: ", ")
+        case .bodyweight:
+            return done.map { "\($0.reps ?? 0)" }.joined(separator: ", ") + " reps"
+        case .weight, .assisted:
+            let weights = Set(done.map { $0.weight ?? -1 })
+            if weights.count == 1 {
+                return "\(kg(done.first?.weight)) × " + done.map { "\($0.reps ?? 0)" }.joined(separator: ", ")
+            }
+            return done.map { "\(kg($0.weight)) × \($0.reps ?? 0)" }.joined(separator: ", ")
+        }
     }
 
     private func bestRecords(in sessions: [Session], for exerciseId: String) -> [PersonalRecord] {
@@ -95,9 +170,12 @@ extension AppData {
                 return
             }
             let better = lowerIsBetter ? value < current.value : value > current.value
-            // Ties go to the earlier session: that's when the record was set.
-            let sameButEarlier = value == current.value && session.startedAt < current.date
-            if better || sameButEarlier {
+            // Same weight: keep the set that did more with it. Otherwise ties
+            // go to the earlier session — that's when the record was set.
+            let tie = value == current.value
+            let betterReps = tie && (reps ?? 0) > (current.reps ?? 0)
+            let sameButEarlier = tie && (reps ?? 0) == (current.reps ?? 0) && session.startedAt < current.date
+            if better || betterReps || sameButEarlier {
                 best[kind] = PersonalRecord(kind: kind, value: value, reps: reps, date: session.startedAt, sessionId: session.id)
             }
         }

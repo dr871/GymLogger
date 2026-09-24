@@ -37,6 +37,12 @@ struct SessionDetailView: View {
     let sessionId: String
     @State private var confirmDelete = false
     @State private var pendingDelete = false
+    @State private var shareText: ShareText?
+
+    struct ShareText: Identifiable {
+        let id = UUID()
+        let text: String
+    }
 
     private var sessionIndex: Int? {
         store.data.sessions.firstIndex { $0.id == sessionId }
@@ -63,6 +69,9 @@ struct SessionDetailView: View {
             // Mutate only once every field bound to this session's index is
             // off screen — see pendingDelete.
             if pendingDelete { store.deleteSession(id: sessionId) }
+        }
+        .sheet(item: $shareText) { share in
+            ShareSheet(items: [share.text])
         }
         .alert("Delete this session?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
@@ -160,6 +169,11 @@ struct SessionDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .card()
+                }
+
+                if let text = store.shareText(sessionId: sessionId) {
+                    Button("Share this workout") { shareText = ShareText(text: text) }
+                        .buttonStyle(BigButtonStyle())
                 }
 
                 Button("Delete this session") { confirmDelete = true }

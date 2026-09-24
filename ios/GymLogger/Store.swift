@@ -280,6 +280,11 @@ final class Store: ObservableObject {
         saveNow()
     }
 
+    /// Plain-text summary of a finished session, for the share sheet.
+    func shareText(sessionId: String) -> String? {
+        data.shareText(for: sessionId)
+    }
+
     func markExported() {
         data.settings.lastExportedAt = Date()
     }

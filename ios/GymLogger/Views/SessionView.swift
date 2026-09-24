@@ -32,11 +32,6 @@ struct SessionView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Finish") { finish() }
-                    .font(.app(17, weight: .bold))
-                    .foregroundStyle(Palette.accent)
-            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 // decimalPad has no return key, so give the user a way out.
@@ -120,6 +115,12 @@ struct SessionView: View {
 
                 Button("+ Add exercise to today") { showPicker = true }
                     .buttonStyle(BigButtonStyle())
+
+                // At the end of the list, where you are when the workout is
+                // over — not under your thumb at the top all session.
+                Button("Finish workout") { finish() }
+                    .buttonStyle(BigButtonStyle(primary: true))
+                    .padding(.top, 8)
 
                 Button("Discard this session") { confirmDiscard = true }
                     .buttonStyle(BigButtonStyle(destructive: true))

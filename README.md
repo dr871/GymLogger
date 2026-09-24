@@ -162,10 +162,28 @@ assistance, labelled *lower is better*.
 
 **Personal records** are derived from history, never stored, so they can't go
 stale: heaviest set and best estimated 1RM (Epley) for weighted work, least
-assistance, most reps, longest hold. They show under the Progress chart, a
-session's detail lists any it set, and finishing a session that beat one pops
-a summary. A record counts when it strictly beats every earlier session — so
-your first session sets the baseline.
+assistance, most reps, longest hold. All of them show under the Progress chart.
+
+What gets *announced* is narrower, so the one line that matters isn't buried:
+finishing a session reports **at most one record per exercise** — the heaviest
+set where there is one, otherwise the estimate, which is what catches more reps
+at the same weight — and says nothing at all for an exercise's first session,
+since a baseline isn't a record. Ties at the same weight keep the better set.
+
+**Share this workout** (on any session in History) puts a plain-text summary on
+the share sheet, for sending to whoever asks what you did:
+
+```
+Full Body — Thu, 24 Sep
+48 min · 18 sets
+
+Leg press — 70 kg × 10, 11, 12
+Plank — 45s, 45s, 45s
+
+Best yet: Leg press 70 kg × 12
+```
+
+Warm-ups, un-ticked sets and exercises you didn't log are left out.
 
 **Weekly volume** is working sets per muscle group per week — the unit the
 10–20 sets/muscle guideline uses, and a fair comparison across a leg press and
