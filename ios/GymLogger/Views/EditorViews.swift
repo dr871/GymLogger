@@ -1,0 +1,480 @@
+import SwiftUI
+
+struct TemplateEditorView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+
+    let templateId: String
+    @State private var showPicker = false
+    @State private var confirmDelete = false
+
+    private var index: Int? {
+        store.data.templates.firstIndex { $0.id == templateId }
+    }
+
+    var body: some View {
+        Group {
+            if let index {
+                editor(index: index)
+            } else {
+                EmptyHint(text: "This workout no longer exists.").padding(.horizontal, 14)
+            }
+        }
+        .screen()
+        .navigationTitle("Edit workout")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { hideKeyboard() }
+                    .font(.system(size: 17, weight: .semibold))
+            }
+        }
+        .sheet(isPresented: $showPicker) {
+            ExercisePickerView { exerciseId in
+                if let index {
+                    let range = (store.exercise(id: exerciseId)?.measure ?? .weight).defaultTarget
+                    store.data.templates[index].items.append(
+                        TemplateItem(exerciseId: exerciseId, sets: 3, targetMin: range.min, targetMax: range.max)
+                    )
+                }
+                showPicker = false
+            }
+        }
+        .alert("Delete this workout?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) {
+                store.data.templates.removeAll { $0.id == templateId }
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Past sessions are kept.")
+        }
+    }
+
+    @ViewBuilder
+    private func editor(index: Int) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                LabeledField(label: "Name") {
+                    TextField("Workout name", text: $store.data.templates[index].name)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(Palette.text)
+                }
+
+                SectionHeader(title: "Exercises")
+
+                let items = store.data.templates[index].items
+                if items.isEmpty {
+                    EmptyHint(text: "No exercises yet.")
+                }
+
+                ForEach(Array(items.enumerated()), id: \.offset) { itemIndex, item in
+                    VStack(alignment: .leading, spacing: 12) {
+                        NavigationLink {
+                            ExerciseEditorView(exerciseId: item.exerciseId)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(store.exercise(id: item.exerciseId)?.name ?? "Missing exercise")
+                                    .font(.system(size: 19, weight: .bold))
+                                    .foregroundStyle(Palette.text)
+                                Text(itemSubtitle(item))
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Palette.muted)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+
+                        HStack(spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Sets").font(.system(size: 13)).foregroundStyle(Palette.muted)
+                                let sets = itemBinding(index, itemIndex, \.sets, fallback: 0)
+                                RepsField(value: Binding(
+                                    get: { sets.wrappedValue },
+                                    set: { if let v = $0 { sets.wrappedValue = v } }
+                                ), placeholder: "3")
+                            }
+                            let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(measure == .time ? "Secs, min–max" : "Reps, min–max")
+                                    .font(.system(size: 13)).foregroundStyle(Palette.muted)
+                                HStack(spacing: 6) {
+                                    RepsField(value: itemBinding(index, itemIndex, \.targetMin, fallback: nil),
+                                              placeholder: "\(measure.defaultTarget.min)")
+                                    Text("–").foregroundStyle(Palette.ghost)
+                                    RepsField(value: itemBinding(index, itemIndex, \.targetMax, fallback: nil),
+                                              placeholder: "\(measure.defaultTarget.max)")
+                                }
+                            }
+                        }
+
+                        // Buttons, not drag handles: reordering has to work with
+                        // damp fingers and one hand.
+                        HStack(spacing: 8) {
+                            Button("▲ Up") { move(index: index, from: itemIndex, by: -1) }
+                                .buttonStyle(ChipStyle())
+                                .disabled(itemIndex == 0)
+                            Button("▼ Down") { move(index: index, from: itemIndex, by: 1) }
+                                .buttonStyle(ChipStyle())
+                                .disabled(itemIndex == items.count - 1)
+                            Button("Remove") {
+                                store.data.templates[index].items.remove(at: itemIndex)
+                            }
+                            .buttonStyle(ChipStyle(tint: Palette.danger))
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
+                }
+
+                Button("+ Add exercise") { showPicker = true }
+                    .buttonStyle(BigButtonStyle())
+
+                Button("Duplicate this workout") {
+                    store.data.duplicateTemplate(id: templateId)
+                    dismiss()
+                }
+                .buttonStyle(BigButtonStyle())
+
+                if store.data.templates.count > 1 {
+                    Button("Delete this workout") { confirmDelete = true }
+                        .buttonStyle(BigButtonStyle(destructive: true))
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 24)
+        }
+    }
+
+    /// A binding to one field of one exercise row that tolerates the row having
+    /// just been removed. Rows here are identified by position, and SwiftUI can
+    /// refresh a row's fields once more after its item is gone — a plain
+    /// subscript then traps on the stale index. Same hazard ExerciseCardView
+    /// guards against with `indicesAreValid`.
+    private func itemBinding<T>(_ index: Int, _ itemIndex: Int,
+                                _ field: WritableKeyPath<TemplateItem, T>, fallback: T) -> Binding<T> {
+        Binding(
+            get: {
+                guard store.data.templates.indices.contains(index),
+                      store.data.templates[index].items.indices.contains(itemIndex) else { return fallback }
+                return store.data.templates[index].items[itemIndex][keyPath: field]
+            },
+            set: { newValue in
+                guard store.data.templates.indices.contains(index),
+                      store.data.templates[index].items.indices.contains(itemIndex) else { return }
+                store.data.templates[index].items[itemIndex][keyPath: field] = newValue
+            }
+        )
+    }
+
+    private func itemSubtitle(_ item: TemplateItem) -> String {
+        let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
+        var parts = ["rest \(store.data.restSec(for: item.exerciseId))s"]
+        switch measure {
+        case .weight: parts.append("+\(Format.weight(store.data.increment(for: item.exerciseId))) kg")
+        case .assisted: parts.append("−\(Format.weight(store.data.increment(for: item.exerciseId))) kg assistance")
+        case .bodyweight: parts.append("bodyweight")
+        case .time: parts.append("timed")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func move(index: Int, from itemIndex: Int, by delta: Int) {
+        let target = itemIndex + delta
+        guard store.data.templates[index].items.indices.contains(target) else { return }
+        let item = store.data.templates[index].items.remove(at: itemIndex)
+        store.data.templates[index].items.insert(item, at: target)
+    }
+}
+
+struct ExerciseEditorView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+    let exerciseId: String
+    @State private var confirmDelete = false
+    @State private var pendingDelete = false
+
+    private var index: Int? {
+        store.data.exercises.firstIndex { $0.id == exerciseId }
+    }
+
+    var body: some View {
+        Group {
+            if let index {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        LabeledField(label: "Name") {
+                            TextField("Name", text: $store.data.exercises[index].name)
+                                .multilineTextAlignment(.trailing)
+                                .foregroundStyle(Palette.text)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Machine settings note")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Palette.muted)
+                            TextField("e.g. seat 4, handles 2", text: $store.data.exercises[index].notes)
+                                .foregroundStyle(Palette.warn)
+                                .padding(.horizontal, 12)
+                                .frame(minHeight: Metrics.tap)
+                                .background(Palette.surface2)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Palette.line, lineWidth: 1)
+                        )
+
+                        Text("The note shows on this exercise every session.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Measured by")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Palette.muted)
+                            Picker("Measured by", selection: $store.data.exercises[index].measure) {
+                                ForEach(Measure.allCases, id: \.self) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Palette.line, lineWidth: 1)
+                        )
+
+                        Text(measureHelp(store.data.exercises[index].measure))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+
+                        LabeledField(label: "Muscle group") {
+                            Picker("Muscle group", selection: $store.data.exercises[index].muscle) {
+                                Text("None").tag(MuscleGroup?.none)
+                                ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                                    Text(muscle.title).tag(MuscleGroup?.some(muscle))
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(Palette.text)
+                        }
+
+                        Text("Counts this exercise's sets towards weekly volume on Progress.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+
+                        LabeledField(label: "Rest timer (sec)") {
+                            RepsField(value: $store.data.exercises[index].restSec,
+                                      placeholder: "\(store.data.settings.defaultRestSec)")
+                        }
+
+                        if store.data.exercises[index].measure.usesWeight {
+                            LabeledField(label: store.data.exercises[index].measure == .assisted
+                                         ? "Reduce assistance by (kg)" : "Increase step (kg)") {
+                                WeightField(value: $store.data.exercises[index].increment,
+                                            placeholder: Format.weight(store.data.settings.defaultIncrement))
+                            }
+                        }
+
+                        Text("Leave blank to use the defaults from Settings.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Palette.muted)
+
+                        Button("Delete this exercise") { confirmDelete = true }
+                            .buttonStyle(BigButtonStyle(destructive: true))
+                            .padding(.top, 20)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 24)
+                }
+            } else {
+                EmptyHint(text: "This exercise no longer exists.").padding(.horizontal, 14)
+            }
+        }
+        .screen()
+        .navigationTitle("Edit exercise")
+        .navigationBarTitleDisplayMode(.inline)
+        .onDisappear {
+            // Deferred so no field bound to this exercise's index is on screen
+            // when it goes.
+            if pendingDelete { store.deleteExercise(id: exerciseId) }
+        }
+        .alert("Delete this exercise?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) {
+                pendingDelete = true
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It comes out of every workout. Past sessions keep their records.")
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { hideKeyboard() }
+                    .font(.system(size: 17, weight: .semibold))
+            }
+        }
+    }
+}
+
+private func measureHelp(_ measure: Measure) -> String {
+    switch measure {
+    case .weight:
+        return "Log the weight and reps. Once every set hits the top of the rep range, the weight goes up and reps drop back to the bottom."
+    case .assisted:
+        return "Log the assistance and reps — 0 means unassisted. Once every set hits the top of the range, the assistance goes down."
+    case .bodyweight:
+        return "Reps only, no weight box. Once every set matches your best, one more rep is suggested, up to the top of the range."
+    case .time:
+        return "Seconds only, no weight box. Once every set matches your best, five more seconds are suggested, up to the top of the range."
+    }
+}
+
+/// Adding one exercise at a time. The standard catalogue is browsable here so
+/// building a workout never means typing names by hand — or pulling in a whole
+/// preset just to get at one of its exercises.
+struct ExercisePickerView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+
+    let onPick: (String) -> Void
+    @State private var search = ""
+
+    private var query: String {
+        search.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func matches(_ name: String) -> Bool {
+        query.isEmpty || name.localizedCaseInsensitiveContains(query)
+    }
+
+    /// What's already in the library, so it's never offered twice.
+    private var mine: [Exercise] {
+        store.data.orderedExercises.filter { matches($0.name) }
+    }
+
+    private func catalogue(_ muscle: MuscleGroup) -> [CatalogueExercise] {
+        ExerciseCatalogue.grouped(muscle).filter { entry in
+            matches(entry.name) && !store.data.exercises.contains {
+                $0.name.compare(entry.name, options: .caseInsensitive) == .orderedSame
+            }
+        }
+    }
+
+    /// Only worth offering once the search matches nothing already on offer.
+    private var canCreate: Bool {
+        guard !query.isEmpty else { return false }
+        return mine.isEmpty && MuscleGroup.allCases.allSatisfy { catalogue($0).isEmpty }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    TextField("Search or name a new exercise", text: $search)
+                        .foregroundStyle(Palette.text)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: Metrics.tap)
+                        .background(Palette.surface2)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    if canCreate {
+                        Button("Create “\(query)”") {
+                            onPick(store.data.addExercise(named: query))
+                        }
+                        .buttonStyle(BigButtonStyle())
+                    }
+
+                    if !mine.isEmpty {
+                        SectionHeader(title: "Your exercises")
+                        ForEach(mine) { exercise in
+                            row(name: exercise.name, detail: subtitle(for: exercise)) {
+                                onPick(exercise.id)
+                            }
+                        }
+                    }
+
+                    ForEach(MuscleGroup.allCases, id: \.self) { muscle in
+                        let entries = catalogue(muscle)
+                        if !entries.isEmpty {
+                            SectionHeader(title: muscle.title)
+                            ForEach(entries) { entry in
+                                row(name: entry.name, detail: detail(for: entry)) {
+                                    onPick(store.data.addExercise(named: entry.name))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 24)
+            }
+            .navigationTitle("Add exercise")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { hideKeyboard() }
+                        .font(.system(size: 17, weight: .semibold))
+                }
+            }
+            .screen()
+        }
+    }
+
+    private func row(name: String, detail: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Palette.text)
+                    Text(detail)
+                        .font(.system(size: 14))
+                        .foregroundStyle(Palette.muted)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "plus").foregroundStyle(Palette.ghost)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .frame(minHeight: Metrics.tap)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Palette.line, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func subtitle(for exercise: Exercise) -> String {
+        var parts = ["rest \(store.data.restSec(for: exercise.id))s"]
+        if exercise.measure != .weight { parts.append(exercise.measure.title.lowercased()) }
+        if !exercise.notes.isEmpty { parts.append(exercise.notes) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func detail(for entry: CatalogueExercise) -> String {
+        var parts = ["rest \(entry.restSec ?? store.data.settings.defaultRestSec)s"]
+        if entry.measure != .weight { parts.append(entry.measure.title.lowercased()) }
+        return parts.joined(separator: " · ")
+    }
+}
