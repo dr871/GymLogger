@@ -5,21 +5,21 @@ struct ProgressTab: View {
     @EnvironmentObject var store: Store
     @State private var selectedId: String?
 
-    private var exercises: [Exercise] { store.data.orderedExercises }
+    /// Only what you've actually done: an exercise you've never logged has
+    /// nothing to plot, and offering it just raises the question.
+    private var exercises: [Exercise] { store.data.loggedExercises }
 
     private var chosen: Exercise? {
         if let selectedId, let match = exercises.first(where: { $0.id == selectedId }) { return match }
-        return exercises.first { !store.data.progressSeries(for: $0.id).isEmpty } ?? exercises.first
+        return exercises.first
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    volumeCard
-
                     if exercises.isEmpty {
-                        EmptyHint(text: "No exercises yet.")
+                        EmptyHint(text: "Nothing logged yet. Finish a session and your lifts show up here.")
                     } else {
                         SectionHeader(title: "Exercise")
                         picker
@@ -28,9 +28,21 @@ struct ProgressTab: View {
                             let series = store.data.progressSeries(for: exercise.id)
 
                             VStack(alignment: .leading, spacing: 8) {
+                                if let summary = store.data.progressSummary(for: exercise.id) {
+                                    Text(summary.headline)
+                                        .font(.app(22, weight: .bold))
+                                        .foregroundStyle(Palette.text)
+                                    if let trend = summary.trend {
+                                        Text(trend)
+                                            .font(.app(15))
+                                            .foregroundStyle(trend == "Best yet" ? Palette.accent : Palette.muted)
+                                    }
+                                }
+
                                 Text(chartTitle(exercise))
-                                    .font(.app(14))
-                                    .foregroundStyle(Palette.muted)
+                                    .font(.app(13))
+                                    .foregroundStyle(Palette.ghost)
+                                    .padding(.top, 4)
 
                                 chart(series: series)
 
@@ -38,6 +50,11 @@ struct ProgressTab: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .card()
+
+                            volumeCard
+                                .padding(.top, 8)
+
+                            SectionHeader(title: "Sessions")
 
                             ForEach(series.reversed()) { point in
                                 HStack {
@@ -102,7 +119,8 @@ struct ProgressTab: View {
 
     /// Working sets per muscle, the last eight weeks, current week last.
     private var volumeCard: some View {
-        let weeks = store.data.weeklyVolume(weeks: 8)
+        let span = store.data.weeksOfHistory(max: 8)
+        let weeks = store.data.weeklyVolume(weeks: span)
         let series = VolumeBar.rows(for: weeks)
         // Explicit types: the type-checker choked on this inline (17 min build).
         let firstWeek: Date = weeks.first?.weekStart ?? Date()
@@ -111,7 +129,8 @@ struct ProgressTab: View {
         let domain: ClosedRange<Date> = firstWeek...windowEnd
 
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Sets per muscle — last 8 weeks")
+            Text(span == 1 ? "Sets per muscle — this week"
+                            : "Sets per muscle — last \(span) weeks")
                 .font(.app(14))
                 .foregroundStyle(Palette.muted)
 
@@ -200,6 +219,15 @@ struct ProgressTab: View {
                         .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                     PointMark(x: .value("Date", point.0), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent)
+                        .annotation(position: .top) {
+                            // Few sessions: two dots and a slope say less than
+                            // two numbers do.
+                            if points.count <= 6 {
+                                Text(Format.weight(point.1))
+                                    .font(.app(12, weight: .semibold))
+                                    .foregroundStyle(Palette.muted)
+                            }
+                        }
                 }
             }
             .chartYScale(domain: .automatic(includesZero: false))

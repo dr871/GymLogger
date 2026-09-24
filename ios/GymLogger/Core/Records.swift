@@ -203,6 +203,108 @@ extension AppData {
         return RecordKind.allCases.compactMap { best[$0] }
     }
 
+    // MARK: - What the chart means
+
+    /// The chart shows a shape. This says what it means, in the words you would
+    /// use yourself: what you last did, and whether that was any good.
+    struct ProgressSummary: Equatable {
+        /// What you last did: "70 kg × 12", "45s", "10 reps".
+        var headline: String
+        /// How it compares: "Best yet", "Up 5 kg on last time", "First time
+        /// logged". nil only when there is nothing to say.
+        var trend: String?
+    }
+
+    func progressSummary(for exerciseId: String) -> ProgressSummary? {
+        let series = progressSeries(for: exerciseId)
+        guard let latest = series.last, latest.value != nil else { return nil }
+        let measure = exercise(id: exerciseId)?.measure ?? latest.measure
+
+        let headline: String
+        switch measure {
+        case .weight:
+            headline = "\(Self.number(latest.topWeight ?? 0)) kg × \(latest.topReps ?? 0)"
+        case .assisted:
+            headline = "\(Self.number(latest.topWeight ?? 0)) kg assist × \(latest.topReps ?? 0)"
+        case .bodyweight:
+            headline = "\(latest.topReps ?? 0) reps"
+        case .time:
+            headline = "\(latest.topReps ?? 0)s"
+        }
+
+        // Compare what you'd say out loud: the weight on the machine, or the
+        // reps and seconds where there is no weight. (The chart plots estimated
+        // 1RM for weighted work, but "up 6.67 kg" is nobody's idea of progress.)
+        func compared(_ point: ProgressPoint) -> Double? {
+            measure.usesWeight ? point.topWeight : point.topReps.map(Double.init)
+        }
+        guard let current = compared(latest) else { return nil }
+
+        let earlier = series.dropLast()
+        guard let previous = earlier.last, let previousValue = compared(previous) else {
+            return ProgressSummary(headline: headline, trend: "First time logged")
+        }
+
+        // Assisted work improves by going down; everything else by going up.
+        let best = measure.lowerIsBetter
+            ? earlier.compactMap(compared).min().map { current < $0 } ?? true
+            : earlier.compactMap(compared).max().map { current > $0 } ?? true
+        if best { return ProgressSummary(headline: headline, trend: "Best yet") }
+
+        let change = current - previousValue
+        if change == 0 {
+            // Same load: more reps at it is still progress worth naming.
+            let reps = (latest.topReps ?? 0) - (previous.topReps ?? 0)
+            guard measure.usesWeight, reps != 0 else {
+                return ProgressSummary(headline: headline, trend: "Same as last time")
+            }
+            let word = abs(reps) == 1 ? "rep" : "reps"
+            return ProgressSummary(headline: headline,
+                                   trend: "Same weight, \(reps > 0 ? "\(reps) more" : "\(-reps) fewer") \(word)")
+        }
+
+        let improved = measure.lowerIsBetter ? change < 0 : change > 0
+        let unit: String
+        switch measure {
+        case .weight, .assisted: unit = "kg"
+        case .bodyweight: unit = abs(change) == 1 ? "rep" : "reps"
+        case .time: unit = "s"
+        }
+        let amount = "\(Self.number(abs(change)))\(unit == "s" ? "" : " ")\(unit)"
+        return ProgressSummary(headline: headline,
+                               trend: "\(improved ? "Up" : "Down") \(amount) on last time")
+    }
+
+    private static func number(_ v: Double) -> String {
+        v == v.rounded() ? "\(Int(v))" : "\(v)"
+    }
+
+    // MARK: - What there is to show
+
+    /// Exercises you have actually logged, most recently trained first. An
+    /// exercise you have never done has nothing to plot, so it isn't offered.
+    var loggedExercises: [Exercise] {
+        var seen: [String] = []
+        for session in finishedSessions {
+            for entry in session.entries where entry.hasWork && !seen.contains(entry.exerciseId) {
+                seen.append(entry.exerciseId)
+            }
+        }
+        return seen.compactMap { exercise(id: $0) }
+    }
+
+    /// How many calendar weeks to draw: enough to cover your history, never
+    /// more than `max`, never fewer than 1. Stops the volume chart showing
+    /// eight mostly-empty weeks to someone who started last Tuesday.
+    func weeksOfHistory(max limit: Int = 8, now: Date = Date(), calendar: Calendar = .current) -> Int {
+        guard let first = finishedSessions.last?.startedAt,
+              let thisWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start,
+              let firstWeek = calendar.dateInterval(of: .weekOfYear, for: first)?.start,
+              let weeks = calendar.dateComponents([.weekOfYear], from: firstWeek, to: thisWeek).weekOfYear
+        else { return 1 }
+        return Swift.min(limit, Swift.max(1, weeks + 1))
+    }
+
     // MARK: - Weekly volume
 
     /// Working sets per muscle for the last `weeks` weeks, oldest first, the

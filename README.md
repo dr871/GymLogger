@@ -154,7 +154,14 @@ the accessibility sizes rather than squeezing to "…".
 **During a session the screen stays awake**, so a phone on the bench doesn't
 need unlocking between sets. Only while the session screen is showing.
 
-**Progress** plots, per session, the best **estimated one-rep max** for
+**Progress** leads with a sentence rather than a shape: what you last did
+("70 kg × 12") and how it compares ("Best yet", "Up 5 kg on last time", "Same
+weight, 2 more reps"). The comparison is in the weight you actually loaded, not
+the estimate, because "up 6.67 kg" is nobody's idea of progress. Only exercises
+you've logged are listed, most recently trained first; the weekly volume card
+sits below the lift and draws only the weeks you have.
+
+Under that it plots, per session, the best **estimated one-rep max** for
 weighted work (Epley, `weight × (1 + reps/30)`) — so the line moves while reps
 climb at one weight, not only when the weight changes — and otherwise the best
 set in the exercise's own unit: seconds, reps, or for assisted work the
@@ -208,7 +215,7 @@ sheet.
 | `ios/GymLogger/Core/DataFile.swift` | reading and writing the one file, and recovering from a damaged one |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 170 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 188 unit tests over the logic layer |
 | `ios/UITests/` | 6 screen tests driving the real UI |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
