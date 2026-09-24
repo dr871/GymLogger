@@ -483,6 +483,33 @@ final class LibraryAndRestoreTests: XCTestCase {
         XCTAssertTrue(preview.firstSession! < preview.lastSession!)
     }
 
+    func testDeletingASessionRemovesItAndAnyTimerItOwned() {
+        var data = AppData.seed()
+        data.startSession(templateId: data.templates[0].id)
+        let active = data.activeSessionId!
+        data.timer = RestTimerState(exerciseId: "x", label: "", endsAt: Date().addingTimeInterval(60), durationSec: 90)
+
+        data.deleteSession(id: active)
+
+        XCTAssertTrue(data.sessions.isEmpty)
+        XCTAssertNil(data.activeSessionId)
+        XCTAssertNil(data.timer, "the rest timer belonged to the session that just went")
+    }
+
+    func testDeletingOneSessionLeavesTheOthers() {
+        var data = AppData.seed()
+        data.startSession(templateId: data.templates[0].id)
+        data.sessions[0].entries[0].sets[0].done = true
+        data.finishSession()
+        let keep = data.sessions[0].id
+        data.startSession(templateId: data.templates[0].id)
+        let drop = data.activeSessionId!
+
+        data.deleteSession(id: drop)
+
+        XCTAssertEqual(data.sessions.map(\.id), [keep])
+    }
+
     func testPruneLeavesARunningTimerAlone() {
         var data = AppData.seed()
         data.timer = RestTimerState(exerciseId: "x", label: "", endsAt: Date().addingTimeInterval(30), durationSec: 90)

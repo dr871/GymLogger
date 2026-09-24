@@ -205,9 +205,10 @@ sheet.
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
+| `ios/GymLogger/Core/DataFile.swift` | reading and writing the one file, and recovering from a damaged one |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 137 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 170 unit tests over the logic layer |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part

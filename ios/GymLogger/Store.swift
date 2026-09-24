@@ -22,14 +22,15 @@ final class Store: ObservableObject {
     @Published private(set) var notificationsAllowed = false
     @Published private(set) var notificationsDenied = false
 
-    private let fileURL: URL
+    /// Reading and writing live in Core, where they are unit-tested.
+    private let file: DataFile
     private var saveTask: Task<Void, Never>?
     private let notificationDelegate = NotificationDelegate()
 
     init(fileURL: URL? = nil) {
         let url = fileURL ?? Store.defaultFileURL()
-        self.fileURL = url
-        self.data = Store.load(from: url)
+        self.file = DataFile(url: url, mirror: Store.backupURL())
+        self.data = file.load()
         UNUserNotificationCenter.current().delegate = notificationDelegate
         // Loaded from the mirror (or seeded)? Put a live file back straight
         // away rather than waiting for the next edit to do it.
@@ -44,50 +45,20 @@ final class Store: ObservableObject {
                                                  appropriateFor: nil,
                                                  create: true))
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = base.appendingPathComponent("GymLogger", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("data.json")
+        return base
+            .appendingPathComponent("GymLogger", isDirectory: true)
+            .appendingPathComponent("data.json")
     }
 
     /// A copy of the live file, kept current, in the app's Documents folder —
-    /// which iOS shows in the Files app under On My iPhone. The live file stays
-    /// private in Application Support so a stray delete in Files costs nothing.
+    /// which iOS shows in the Files app. The live file stays private in
+    /// Application Support so a stray delete in Files costs nothing.
     nonisolated static func backupURL() -> URL? {
         guard let docs = try? FileManager.default.url(for: .documentDirectory,
                                                       in: .userDomainMask,
                                                       appropriateFor: nil,
                                                       create: true) else { return nil }
         return docs.appendingPathComponent("GymLogger-backup.json")
-    }
-
-    /// The live file first; if that's missing or unreadable, the mirror kept in
-    /// Documents; only then the seed. One bad write must not cost the history
-    /// when an intact copy is sitting next door.
-    nonisolated static func load(from url: URL, mirror: URL? = Store.backupURL()) -> AppData {
-        if let data = read(url, setAsideIfCorrupt: true) { return data }
-        if let mirror, let data = read(mirror, setAsideIfCorrupt: false) { return data }
-        return .seed()
-    }
-
-    /// nil when the file is missing, empty, or can't be decoded.
-    nonisolated private static func read(_ url: URL, setAsideIfCorrupt: Bool) -> AppData? {
-        guard let raw = try? Data(contentsOf: url) else { return nil }
-        do {
-            var decoded = try AppData.decoder().decode(AppData.self, from: raw)
-            decoded.pruneExpiredTimer()
-            // An empty file is indistinguishable from a fresh install for the
-            // user, so treat it as nothing rather than a blank app.
-            return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? nil : decoded
-        } catch {
-            // Unreadable: keep the original beside it rather than overwriting
-            // the only copy of someone's training history.
-            if setAsideIfCorrupt {
-                let aside = url.deletingPathExtension().appendingPathExtension("corrupt.json")
-                try? FileManager.default.removeItem(at: aside)
-                try? FileManager.default.moveItem(at: url, to: aside)
-            }
-            return nil
-        }
     }
 
     private func scheduleSave() {
@@ -103,11 +74,7 @@ final class Store: ObservableObject {
         saveTask?.cancel()
         saveTask = nil
         do {
-            let encoded = try data.exportJSON()
-            try encoded.write(to: fileURL, options: .atomic)
-            if let backup = Store.backupURL() {
-                try? encoded.write(to: backup, options: .atomic)
-            }
+            try file.save(data)
         } catch {
             print("GymLogger: save failed — \(error)")
         }
