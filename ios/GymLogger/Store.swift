@@ -148,29 +148,6 @@ final class Store: ObservableObject {
         }
     }
 
-    /// Reverts the prefilled bump back to last session's weight for sets not yet
-    /// ticked — the explicit "ignore the suggestion" escape hatch.
-    func ignoreSuggestion(entryIndex: Int) {
-        guard let s = data.activeSessionIndex,
-              data.sessions[s].entries.indices.contains(entryIndex) else { return }
-
-        let entry = data.sessions[s].entries[entryIndex]
-        let suggestion = data.suggestion(for: entry.exerciseId, excluding: data.sessions[s].id,
-                                         targetMin: entry.targetMin, targetMax: entry.targetMax)
-        let last = data.lastEntry(for: entry.exerciseId, excluding: data.sessions[s].id)?.entry
-
-        data.sessions[s].entries[entryIndex].suggested = false
-        for i in data.sessions[s].entries[entryIndex].sets.indices
-        where !data.sessions[s].entries[entryIndex].sets[i].done {
-            if entry.measure.usesWeight {
-                data.sessions[s].entries[entryIndex].sets[i].weight = suggestion.lastWeight
-            }
-            // Back to last time's reps, set for set.
-            let previous = last.flatMap { $0.sets.indices.contains(i) ? $0.sets[i].reps : nil }
-            data.sessions[s].entries[entryIndex].sets[i].reps = previous ?? suggestion.lastReps
-        }
-    }
-
     func addSet(entryIndex: Int) {
         guard let s = data.activeSessionIndex,
               data.sessions[s].entries.indices.contains(entryIndex) else { return }
@@ -181,24 +158,11 @@ final class Store: ObservableObject {
         )
     }
 
-    func addWarmup(entryIndex: Int) {
-        guard let s = data.activeSessionIndex else { return }
-        data.addWarmup(sessionIndex: s, entryIndex: entryIndex)
-    }
-
     func toggleWarmup(entryIndex: Int, setIndex: Int) {
         guard let s = data.activeSessionIndex,
               data.sessions[s].entries.indices.contains(entryIndex),
               data.sessions[s].entries[entryIndex].sets.indices.contains(setIndex) else { return }
         data.sessions[s].entries[entryIndex].sets[setIndex].warmup.toggle()
-    }
-
-    /// ± the exercise's increment on every set not yet ticked.
-    func stepWeight(entryIndex: Int, up: Bool) {
-        guard let s = data.activeSessionIndex,
-              data.sessions[s].entries.indices.contains(entryIndex) else { return }
-        let step = data.increment(for: data.sessions[s].entries[entryIndex].exerciseId)
-        data.adjustWeight(sessionIndex: s, entryIndex: entryIndex, by: up ? step : -step)
     }
 
     func removeSet(entryIndex: Int) {

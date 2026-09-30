@@ -96,37 +96,33 @@ set. The lookup is per-exercise, not per-session — it finds the most recent
 finished session that actually logged *that movement*, so skipping a machine or
 running a different template doesn't break the target.
 
-**Every exercise has a rep range** (e.g. 8–12; seconds for timed work) and
-**progression is double progression**: climb the range at one weight, and once
-every set hits the top, the weight moves and reps drop back to the bottom.
-Today's fields come prefilled accordingly — last session's numbers set for set
-while you're climbing, or the bump when it's earned, with a *Keep 80 kg* button
-to hold. A fixed target is just a range with equal ends, and no range means no
-bump is ever suggested.
+**Every exercise has a rep range** (e.g. 8–12; seconds for timed work) — a
+target to aim at, not a rule the app enforces.
 
-**How an exercise is measured** decides what a set records and what moves:
+**The app never proposes a weight.** Today's fields open prefilled with last
+session, set for set, and you change what you want to change. Gym stacks move
+in pin positions plus small add-on tabs, so any number computed from a fixed
+increment is as likely to be unloadable as not — better to show what you did
+and let you type what you're doing.
 
-| Measure | A set needs | When every set hits the top of the range |
-|---|---|---|
-| Weight | weight > 0, reps > 0 | weight + increment, reps back to the bottom |
-| Assisted | assistance ≥ 0 (0 = unassisted), reps > 0 | assistance − increment, down to 0 |
-| Bodyweight | reps > 0 | +1 rep, up to the top of the range |
-| Time | seconds > 0 | +5s, up to the top of the range |
+**How an exercise is measured** decides what a set records:
 
-For bodyweight and timed work there is no weight to move, so "hitting the top"
-means every set matched your best; the reps themselves climb until the range is
-full. Assisted and timed exercises hide or relabel the boxes to suit.
+| Measure | A set needs |
+|---|---|
+| Weight | weight > 0, reps > 0 |
+| Assisted | assistance ≥ 0 (0 = unassisted), reps > 0 |
+| Bodyweight | reps > 0 |
+| Time | seconds > 0 |
+
+Assisted work treats the *lowest* assistance as the best set. Assisted and
+timed exercises hide or relabel the boxes to suit.
 
 **A set can only be ticked once it's logged** according to its measure (table
 above). Unticking is always allowed.
 
-**Warm-up sets** — *+ Warm-up* adds one at the top at roughly half the
-working weight; tapping a set's number toggles it. They're logged but never
-count: not for progression, records, volume, or whether a session "did" the
+**Warm-up sets** — tapping a set's number toggles it. They're logged but never
+count: not for records, volume, prefill, or whether a session "did" the
 exercise, and last session's numbers line up against working sets only.
-
-**±** chips step every un-ticked set by the exercise's increment, so a stack
-that doesn't match the suggestion is two taps rather than a decimal pad.
 
 **Timed holds have a timer**: ▶ counts up in place of the seconds field, ■
 writes the time. It buzzes as you pass the target.
@@ -160,6 +156,13 @@ weight, 2 more reps"). The comparison is in the weight you actually loaded, not
 the estimate, because "up 6.67 kg" is nobody's idea of progress. Only exercises
 you've logged are listed, most recently trained first; the weekly volume card
 sits below the lift and draws only the weeks you have.
+
+**The chart plots one of four metrics**, switchable above it: est. 1RM
+(the default), heaviest set, reps, or volume. A weight-only line can sit flat
+for months while the reps underneath it climb, and the estimate extrapolates
+hard once a set passes about twelve reps — so neither is the whole story on its
+own. Where the number comes from a single set, the point is labelled with that
+set ("59×12") rather than the derived figure.
 
 Under that it plots, per session, the best **estimated one-rep max** for
 weighted work (Epley, `weight × (1 + reps/30)`) — so the line moves while reps
@@ -208,7 +211,7 @@ sheet.
 | Path | |
 |---|---|
 | `ios/GymLogger/Core/Models.swift` | value types for the whole data model |
-| `ios/GymLogger/Core/Logic.swift` | last-session lookup, suggestion rule, progress series |
+| `ios/GymLogger/Core/Logic.swift` | last-session lookup, prefill, progress series |
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
@@ -228,7 +231,7 @@ Linux CI.
 One JSON file in Application Support:
 
 - `exercises` — the durable identity of a movement: name, note, rest,
-  increment, `measure` (`weight` · `assisted` · `bodyweight` · `time`) and
+  `measure` (`weight` · `assisted` · `bodyweight` · `time`) and
   `muscle` (chest · back · shoulders · arms · legs · core, or none)
 - `templates` — an ordered list of `{exerciseId, sets, targetMin, targetMax}`
 - `sessions` — what actually happened, with name and note snapshotted; each
@@ -254,7 +257,7 @@ cd ios && swift test
 ```
 
 137 tests over the logic layer: double progression for each measure and every
-way it should *not* fire, warm-up sets never counting, set-completion rules,
+prefill across the four measures, warm-up sets never counting, set-completion rules,
 rep ranges, estimated-max progress, personal records and when one counts as
 new, weekly sets per muscle, which workout is next, duplicating and adding to
 workouts, weight stepping, per-exercise history lookup, note propagation, the

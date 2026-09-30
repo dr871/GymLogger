@@ -173,8 +173,8 @@ struct TemplateEditorView: View {
         let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
         var parts = ["rest \(store.data.restSec(for: item.exerciseId))s"]
         switch measure {
-        case .weight: parts.append("+\(Format.weight(store.data.increment(for: item.exerciseId))) kg")
-        case .assisted: parts.append("−\(Format.weight(store.data.increment(for: item.exerciseId))) kg assistance")
+        case .weight: break
+        case .assisted: parts.append("assisted")
         case .bodyweight: parts.append("bodyweight")
         case .time: parts.append("timed")
         }
@@ -277,15 +277,7 @@ struct ExerciseEditorView: View {
                                       placeholder: "\(store.data.settings.defaultRestSec)")
                         }
 
-                        if store.data.exercises[index].measure.usesWeight {
-                            LabeledField(label: store.data.exercises[index].measure == .assisted
-                                         ? "Reduce assistance by (kg)" : "Increase step (kg)") {
-                                WeightField(value: $store.data.exercises[index].increment,
-                                            placeholder: Format.weight(store.data.settings.defaultIncrement))
-                            }
-                        }
-
-                        Text("Leave blank to use the defaults from Settings.")
+                        Text("Leave blank to use the default rest from Settings.")
                             .font(.app(13))
                             .foregroundStyle(Palette.muted)
 
@@ -330,13 +322,13 @@ struct ExerciseEditorView: View {
 private func measureHelp(_ measure: Measure) -> String {
     switch measure {
     case .weight:
-        return "Log the weight and reps. Once every set hits the top of the rep range, the weight goes up and reps drop back to the bottom."
+        return "Log the weight and reps. Today starts prefilled with last session, set for set."
     case .assisted:
-        return "Log the assistance and reps — 0 means unassisted. Once every set hits the top of the range, the assistance goes down."
+        return "Log the assistance and reps — 0 means unassisted. Lower is better. Today starts prefilled with last session."
     case .bodyweight:
-        return "Reps only, no weight box. Once every set matches your best, one more rep is suggested, up to the top of the range."
+        return "Reps only, no weight box. Today starts prefilled with last session, set for set."
     case .time:
-        return "Seconds only, no weight box. Once every set matches your best, five more seconds are suggested, up to the top of the range."
+        return "Seconds only, no weight box. Today starts prefilled with last session, set for set."
     }
 }
 

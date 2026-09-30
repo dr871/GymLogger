@@ -63,20 +63,16 @@ struct Exercise: Codable, Identifiable, Hashable {
     var notes: String = ""
     /// nil falls back to `Settings.defaultRestSec`.
     var restSec: Int?
-    /// nil falls back to `Settings.defaultIncrement`. For assisted work it is
-    /// how much less help to suggest.
-    var increment: Double?
     var measure: Measure = .weight
     /// For weekly volume. Read live, not snapshotted: recategorising an
     /// exercise should move its whole history with it.
     var muscle: MuscleGroup?
 
-    init(id: String = newID("ex"), name: String, notes: String = "", restSec: Int? = nil, increment: Double? = nil, measure: Measure = .weight, muscle: MuscleGroup? = nil) {
+    init(id: String = newID("ex"), name: String, notes: String = "", restSec: Int? = nil, measure: Measure = .weight, muscle: MuscleGroup? = nil) {
         self.id = id
         self.name = name
         self.notes = notes
         self.restSec = restSec
-        self.increment = increment
         self.measure = measure
         self.muscle = muscle
     }
@@ -132,8 +128,6 @@ struct SessionEntry: Codable, Hashable, Identifiable {
     var targetMax: Int?
     var note: String = ""
     var sets: [SetEntry] = []
-    /// True when this entry opened with an increase suggested.
-    var suggested: Bool = false
     /// Snapshotted alongside `name` and the range, so changing how the exercise
     /// is measured — or deleting it — can't retroactively invalidate a session.
     var measure: Measure = .weight
@@ -190,7 +184,6 @@ struct Session: Codable, Identifiable, Hashable {
 
 struct Settings: Codable, Hashable {
     var defaultRestSec: Int = 90
-    var defaultIncrement: Double = 2.5
     /// When a backup was last handed off via the share sheet. The phone is the
     /// only copy, so Home nudges when this gets stale.
     var lastExportedAt: Date?

@@ -206,10 +206,6 @@ struct ExerciseCardView: View {
                     .padding(.top, 4)
             }
 
-            if entry.suggested && !entry.isComplete {
-                suggestionBanner
-            }
-
             if showsRows {
                 setRows
                 footer
@@ -269,54 +265,7 @@ struct ExerciseCardView: View {
     }
 
     /// Built as a single Text so the sentence wraps as one paragraph.
-    private func suggestionText(_ suggestion: Suggestion) -> Text {
-        let reps = suggestion.reps.map { " × \($0)" } ?? ""
-        switch entry.measure {
-        case .weight:
-            return Text("Hit the top of the range last time — try \(Text("\(Format.weight(suggestion.weight)) kg\(reps)").bold())")
-        case .assisted:
-            return Text("Hit the top of the range last time — try \(Text("\(Format.weight(suggestion.weight)) kg assistance\(reps)").bold())")
-        case .bodyweight:
-            return Text("Every set matched last time — try \(Text("\(suggestion.reps ?? 0) reps").bold())")
-        case .time:
-            return Text("Held every set last time — try \(Text("\(suggestion.reps ?? 0)s").bold())")
-        }
-    }
-
-    private func keepTitle(_ suggestion: Suggestion) -> String {
-        switch entry.measure {
-        case .weight: return "Keep \(Format.weight(suggestion.lastWeight)) kg"
-        case .assisted: return "Keep \(Format.weight(suggestion.lastWeight)) kg assistance"
-        case .bodyweight: return "Keep \(suggestion.lastReps ?? 0) reps"
-        case .time: return "Keep \(suggestion.lastReps ?? 0)s"
-        }
-    }
-
-    private var suggestionBanner: some View {
-        let suggestion = store.data.suggestion(for: entry.exerciseId, excluding: store.data.sessions[sessionIndex].id,
-                                               targetMin: entry.targetMin, targetMax: entry.targetMax)
-        return VStack(alignment: .leading, spacing: 8) {
-            suggestionText(suggestion)
-                .foregroundStyle(Palette.accent)
-
-            Button(keepTitle(suggestion)) {
-                store.ignoreSuggestion(entryIndex: entryIndex)
-            }
-            .buttonStyle(ChipStyle())
-        }
-        .font(.app(14))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(Palette.accent.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Palette.accent.opacity(0.28), lineWidth: 1)
-        )
-        .padding(.top, 10)
-    }
-
-    private var setRows: some View {
+                private var setRows: some View {
         VStack(spacing: 8) {
             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
                 let working = entry.workingIndex(of: setIndex)
@@ -451,18 +400,7 @@ struct ExerciseCardView: View {
     private var footer: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                if entry.measure.usesWeight {
-                    let step = Format.weight(store.data.increment(for: entry.exerciseId))
-                    Button("−\(step)") { store.stepWeight(entryIndex: entryIndex, up: false) }
-                        .buttonStyle(ChipStyle())
-                        .accessibilityLabel("\(step) kg less on every set not yet done")
-                    Button("+\(step)") { store.stepWeight(entryIndex: entryIndex, up: true) }
-                        .buttonStyle(ChipStyle())
-                        .accessibilityLabel("\(step) kg more on every set not yet done")
-                }
                 Button("+ Set") { store.addSet(entryIndex: entryIndex) }
-                    .buttonStyle(ChipStyle())
-                Button("+ Warm-up") { store.addWarmup(entryIndex: entryIndex) }
                     .buttonStyle(ChipStyle())
                 Button("− Set") { store.removeSet(entryIndex: entryIndex) }
                     .buttonStyle(ChipStyle())

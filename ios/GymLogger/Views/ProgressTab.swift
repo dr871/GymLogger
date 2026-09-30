@@ -4,6 +4,7 @@ import Charts
 struct ProgressTab: View {
     @EnvironmentObject var store: Store
     @State private var selectedId: String?
+    @State private var metric: ProgressMetric = .estimatedMax
 
     /// Only what you've actually done: an exercise you've never logged has
     /// nothing to plot, and offering it just raises the question.
@@ -44,7 +45,19 @@ struct ProgressTab: View {
                                     .foregroundStyle(Palette.ghost)
                                     .padding(.top, 4)
 
-                                chart(series: series)
+                                if exercise.measure == .weight {
+                                    Picker("Metric", selection: $metric) {
+                                        ForEach(ProgressMetric.allCases) { m in
+                                            Text(m.title).tag(m)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .padding(.vertical, 2)
+
+                                    chart(series: series, metric: metric)
+                                } else {
+                                    chart(series: series, metric: nil)
+                                }
 
                                 records(for: exercise)
                             }
@@ -192,16 +205,17 @@ struct ProgressTab: View {
     /// should be heading down.
     private func chartTitle(_ exercise: Exercise) -> String {
         switch exercise.measure {
-        case .weight: return "\(exercise.name) — est. 1RM (kg)"
+        case .weight: return "\(exercise.name) — \(metric.title.lowercased()) (\(metric.unit))"
         case .assisted: return "\(exercise.name) — best set (\(exercise.measure.unit)) · lower is better"
         case .bodyweight, .time: return "\(exercise.name) — best set (\(exercise.measure.unit))"
         }
     }
 
     @ViewBuilder
-    private func chart(series: [ProgressPoint]) -> some View {
-        let points = series.compactMap { point -> (Date, Double)? in
-            point.value.map { (point.date, $0) }
+    private func chart(series: [ProgressPoint], metric: ProgressMetric?) -> some View {
+        let points = series.compactMap { point -> (ProgressPoint, Double)? in
+            let value = metric.map { point.value(for: $0) } ?? point.value
+            return value.map { (point, $0) }
         }
 
         if points.isEmpty {
@@ -212,18 +226,18 @@ struct ProgressTab: View {
         } else {
             Chart {
                 ForEach(Array(points.enumerated()), id: \.offset) { _, point in
-                    AreaMark(x: .value("Date", point.0), y: .value("Value", point.1))
+                    AreaMark(x: .value("Date", point.0.date), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent.opacity(0.14))
-                    LineMark(x: .value("Date", point.0), y: .value("Value", point.1))
+                    LineMark(x: .value("Date", point.0.date), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent)
                         .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    PointMark(x: .value("Date", point.0), y: .value("Value", point.1))
+                    PointMark(x: .value("Date", point.0.date), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent)
                         .annotation(position: .top) {
                             // Few sessions: two dots and a slope say less than
                             // two numbers do.
                             if points.count <= 6 {
-                                Text(Format.weight(point.1))
+                                Text(pointLabel(point.0, value: point.1, metric: metric))
                                     .font(.app(12, weight: .semibold))
                                     .foregroundStyle(Palette.muted)
                             }
@@ -243,6 +257,20 @@ struct ProgressTab: View {
                 }
             }
             .frame(height: 190)
+        }
+    }
+
+    /// For the metrics that come from one set, name that set — a line that
+    /// rises purely on reps at an unchanged weight otherwise says nothing
+    /// about why it rose.
+    private func pointLabel(_ point: ProgressPoint, value: Double, metric: ProgressMetric?) -> String {
+        switch metric {
+        case .estimatedMax, .heaviest, nil:
+            return point.topSetText ?? Format.weight(value)
+        case .reps:
+            return "\(Int(value))"
+        case .volume:
+            return Format.weight(value.rounded())
         }
     }
 

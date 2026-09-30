@@ -44,13 +44,6 @@ struct SettingsView: View {
                         ), placeholder: "90")
                     }
 
-                    LabeledField(label: "Weight increase step (kg)") {
-                        WeightField(value: Binding(
-                            get: { store.data.settings.defaultIncrement },
-                            set: { if let v = $0 { store.data.settings.defaultIncrement = v } }
-                        ), placeholder: "2.5")
-                    }
-
                     SectionHeader(title: "Rest alerts")
 
                     if store.notificationsAllowed {
