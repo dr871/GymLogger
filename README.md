@@ -47,6 +47,14 @@ A copy of the live data is also kept current in the **Files** app, under On My
 iPhone → GymLogger → `GymLogger-backup.json`, so you can copy it out without
 opening the app. Deleting that copy is harmless; the live file is elsewhere.
 
+**A file from a newer build is never quietly downgraded.** Decoding drops what
+it doesn't recognise, so restoring a newer backup would strip fields while
+keeping the higher version number — the file would then claim to be something
+it no longer is. Restore refuses it and says so. If the *live* file turns out
+to be newer (easy to hit when a free-account build is reinstalled weekly), the
+app still opens, but keeps the original verbatim as `data.v<N>.json` first, so
+the next save can't write the loss back over it.
+
 ## Sideloading (no Mac at install time)
 
 ```sh

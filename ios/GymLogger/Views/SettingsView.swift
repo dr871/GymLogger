@@ -134,6 +134,8 @@ struct SettingsView: View {
                     do {
                         pendingRestore = try store.previewRestore(url: url)
                         confirmRestore = true
+                    } catch RestoreError.tooNew(let fileVersion, _) {
+                        restoreError = "That backup was made by a newer version of GymLogger (format \(fileVersion)). Update the app, then restore — loading it here would quietly drop whatever this version doesn't understand."
                     } catch RestoreError.empty {
                         restoreError = "That file has no exercises or sessions in it, so there is nothing to restore."
                     } catch {

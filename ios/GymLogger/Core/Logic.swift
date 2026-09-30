@@ -154,17 +154,16 @@ extension AppData {
         let last = lastEntry(for: exerciseId)?.entry.workingSets
         let measure = exercise(id: exerciseId)?.measure ?? .weight
 
-        // Last session, set for set, so repeating needs no typing and beating
-        // it means changing one number. A first session starts at the bottom
-        // of the range.
+        // Last session, set for set — weight as well as reps. Loading the same
+        // ramp or drop-off you actually did beats prefilling your best set
+        // three times and making you correct the last one every session. Sets
+        // beyond what was logged fall back to last session's best, and a first
+        // session starts at the bottom of the range.
         let sets = (0..<max(1, setCount)).map { i -> SetEntry in
-            let reps: Int?
-            if let last, let previous = (last.indices.contains(i) ? last[i].reps : nil) ?? lastTime.reps {
-                reps = previous
-            } else {
-                reps = targetMin ?? targetMax
-            }
-            return SetEntry(weight: measure.usesWeight ? lastTime.weight : nil, reps: reps, done: false)
+            let previous = last.flatMap { $0.indices.contains(i) ? $0[i] : nil }
+            let weight = previous?.weight ?? lastTime.weight
+            let reps = previous?.reps ?? lastTime.reps ?? targetMin ?? targetMax
+            return SetEntry(weight: measure.usesWeight ? weight : nil, reps: reps, done: false)
         }
 
         return SessionEntry(
@@ -396,6 +395,10 @@ enum RestoreError: Error, Equatable {
     case unreadable
     /// Decoded, but there is nothing in it — restoring would only wipe.
     case empty
+    /// Written by a newer build. Decoding drops what it doesn't recognise, so
+    /// accepting it would quietly strip fields while keeping the higher version
+    /// number — the file would then claim to be something it no longer is.
+    case tooNew(fileVersion: Int, appVersion: Int)
 }
 
 extension AppData {
@@ -419,6 +422,9 @@ extension AppData {
         }
         guard !decoded.exercises.isEmpty || !decoded.sessions.isEmpty else {
             throw RestoreError.empty
+        }
+        guard decoded.version <= AppData.schemaVersion else {
+            throw RestoreError.tooNew(fileVersion: decoded.version, appVersion: AppData.schemaVersion)
         }
         // A session id that points at nothing is a leftover, not state.
         if decoded.activeSession == nil { decoded.activeSessionId = nil }

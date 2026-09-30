@@ -43,6 +43,20 @@ struct DataFile {
         guard let raw = try? Data(contentsOf: url) else { return nil }
         do {
             var decoded = try AppData.decoder().decode(AppData.self, from: raw)
+
+            // Written by a newer build — running an older one again is easy
+            // when a free-account build is reinstalled every week. Decoding has
+            // already dropped whatever this build doesn't know about, and the
+            // next save would write that loss straight back over the file, with
+            // no error and nothing set aside. Keep the original verbatim first.
+            if decoded.version > AppData.schemaVersion, setAsideIfDamaged {
+                let kept = url.deletingPathExtension()
+                    .appendingPathExtension("v\(decoded.version).json")
+                if !FileManager.default.fileExists(atPath: kept.path) {
+                    try? raw.write(to: kept, options: .atomic)
+                }
+            }
+
             decoded.pruneExpiredTimer(at: now)
             return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? nil : decoded
         } catch {

@@ -216,9 +216,13 @@ struct RestTimerState: Codable, Hashable {
 }
 
 struct AppData: Codable {
+    /// The newest layout this build understands. Bump it when fields are added
+    /// so older builds can tell they are looking at something newer.
+    static let schemaVersion = 2
+
     /// 2: measures, rep ranges, muscles and warm-up sets. Decoding is forgiving
     /// either way; this is for whoever writes the next migration.
-    var version: Int = 2
+    var version: Int = AppData.schemaVersion
     var settings = Settings()
     /// Arrays rather than dictionaries: order is meaningful and deterministic.
     var exercises: [Exercise] = []

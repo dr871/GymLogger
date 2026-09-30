@@ -33,6 +33,14 @@ final class DataFileTests: XCTestCase {
 
     // MARK: - Loading
 
+    /// A path whose parent is a regular file, so creating the directory under
+    /// it fails with ENOTDIR — on macOS and on Linux, as root or not.
+    private func blockedPath(_ name: String) -> URL {
+        let blocker = dir.appendingPathComponent("blocker")
+        FileManager.default.createFile(atPath: blocker.path, contents: Data())
+        return blocker.appendingPathComponent(name)
+    }
+
     func testNoFileYetGivesTheSeededWorkout() {
         let loaded = file.load()
         XCTAssertEqual(loaded.templates.first?.name, "Full Body")
@@ -131,13 +139,13 @@ final class DataFileTests: XCTestCase {
     /// convenience, the live file is the data.
     func testAnUnwritableMirrorDoesNotStopTheRealSave() throws {
         let blocked = DataFile(url: dir.appendingPathComponent("data.json"),
-                               mirror: URL(fileURLWithPath: "/System/nope/mirror.json"))
+                               mirror: blockedPath("mirror.json"))
         XCTAssertNoThrow(try blocked.save(seeded(note: "kept")))
         XCTAssertEqual(blocked.load().exercises[0].notes, "kept")
     }
 
     func testAnUnwritableLiveFileThrows() {
-        let blocked = DataFile(url: URL(fileURLWithPath: "/System/nope/data.json"), mirror: nil)
+        let blocked = DataFile(url: blockedPath("data.json"), mirror: nil)
         XCTAssertThrowsError(try blocked.save(AppData.seed()))
     }
 
@@ -156,5 +164,86 @@ final class DataFileTests: XCTestCase {
         XCTAssertEqual(loaded.sessions[0].entries[0].sets[0].weight, 60)
         XCTAssertEqual(loaded.settings.defaultRestSec, 120)
         XCTAssertNil(loaded.activeSessionId)
+    }
+}
+
+/// A file from a build that knew more than this one does.
+final class NewerSchemaTests: XCTestCase {
+
+    private var dir: URL!
+
+    override func setUpWithError() throws {
+        dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("gymlogger-newer-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    /// The same shape as a real export, plus fields a later version added.
+    private func futureFile() -> Data {
+        """
+        {"version": 99,
+         "settings": {"defaultRestSec": 90},
+         "exercises": [{"id":"ex_1","name":"Leg press","notes":"Seat 2","equipment":"machine"}],
+         "templates": [],
+         "sessions": [{"id":"s_1","templateId":"t","name":"Full Body",
+           "startedAt":"2026-09-29T09:12:53Z","finishedAt":"2026-09-29T10:04:15Z",
+           "bodyweightKg": 78.5,
+           "entries":[{"id":"e_1","exerciseId":"ex_1","name":"Leg press","targetMin":8,"targetMax":12,
+             "sets":[{"id":"st_1","weight":59,"reps":12,"done":true,"tempo":"3-1-2"}]}]}]}
+        """.data(using: .utf8)!
+    }
+
+    func testRestoreRefusesABackupFromTheFuture() {
+        XCTAssertThrowsError(try AppData.restore(from: futureFile())) { error in
+            XCTAssertEqual(error as? RestoreError,
+                           .tooNew(fileVersion: 99, appVersion: AppData.schemaVersion))
+        }
+    }
+
+    func testRestoreStillAcceptsThisVersionAndOlder() throws {
+        var current = AppData.seed()
+        current.startSession(templateId: current.templates[0].id)
+        current.sessions[0].entries[0].sets[0].done = true
+        current.finishSession()
+        XCTAssertNoThrow(try AppData.restore(from: try current.exportJSON()))
+
+        let older = #"{"version":1,"exercises":[{"id":"ex_1","name":"Leg press"}],"templates":[],"sessions":[]}"#
+        XCTAssertNoThrow(try AppData.restore(from: older.data(using: .utf8)!))
+    }
+
+    func testLoadingANewerLiveFileKeepsTheOriginalVerbatim() throws {
+        let live = dir.appendingPathComponent("data.json")
+        let raw = futureFile()
+        try raw.write(to: live)
+
+        let file = DataFile(url: live, mirror: nil)
+        let loaded = file.load()
+
+        // It still opens — refusing to start would help nobody.
+        XCTAssertEqual(loaded.exercises.first?.name, "Leg press")
+
+        // But the richer original is kept, because saving would strip it.
+        let kept = dir.appendingPathComponent("data.v99.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path),
+                      "a file from a newer build must survive this one saving over it")
+        XCTAssertEqual(try Data(contentsOf: kept), raw, "kept byte for byte")
+
+        try file.save(loaded)
+        XCTAssertEqual(try Data(contentsOf: kept), raw, "and the save does not touch it")
+    }
+
+    func testAnOrdinaryFileIsNotCopiedAside() throws {
+        let live = dir.appendingPathComponent("data.json")
+        try AppData.seed().exportJSON().write(to: live)
+
+        _ = DataFile(url: live, mirror: nil).load()
+
+        let strays = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+            .filter { $0 != "data.json" }
+        XCTAssertTrue(strays.isEmpty, "found \(strays)")
     }
 }

@@ -789,6 +789,28 @@ final class PrefillAcrossMeasuresTests: XCTestCase {
         XCTAssertEqual(entry.sets.map(\.reps), [12, 12, 12], "and reps do not reset")
     }
 
+    func testPrefillReproducesARampAndADropRatherThanTheBestSetThrice() {
+        var data = AppData()
+        _ = history(measure: .weight, range: (8, 12), sets: [(59, 12), (59, 12), (45, 15)], into: &data)
+
+        data.startSession(templateId: data.templates[0].id)
+        let entry = data.activeSession!.entries[0]
+
+        XCTAssertEqual(entry.sets.map(\.weight), [59, 59, 45],
+                       "dropping the last set is the pattern, not an error to correct every week")
+        XCTAssertEqual(entry.sets.map(\.reps), [12, 12, 15])
+    }
+
+    func testSetsBeyondLastSessionFallBackToItsBest() {
+        var data = AppData()
+        let id = history(measure: .weight, range: (8, 12), sets: [(50, 10), (60, 10)], into: &data)
+        data.templates[0].items[0].sets = 4
+
+        data.startSession(templateId: data.templates[0].id)
+        XCTAssertEqual(data.activeSession!.entries[0].sets.map(\.weight), [50, 60, 60, 60])
+        _ = id
+    }
+
     func testWeightRepeatsMidRangeSetForSet() {
         var data = AppData()
         _ = history(measure: .weight, range: (8, 12), sets: [(60, 10), (60, 9), (60, 8)], into: &data)
@@ -804,7 +826,8 @@ final class PrefillAcrossMeasuresTests: XCTestCase {
         XCTAssertEqual(data.lastTime(for: id).weight, 15, "lower assistance is the better set")
 
         data.startSession(templateId: data.templates[0].id)
-        XCTAssertEqual(data.activeSession!.entries[0].sets.map(\.weight), [15, 15, 15])
+        XCTAssertEqual(data.activeSession!.entries[0].sets.map(\.weight), [20, 15, 18],
+                       "prefill repeats what you actually did, set for set")
     }
 
     func testBodyweightPrefillsRepsAndNeverAWeight() {
