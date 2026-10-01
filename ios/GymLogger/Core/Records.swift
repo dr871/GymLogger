@@ -221,11 +221,14 @@ extension AppData {
         let measure = exercise(id: exerciseId)?.measure ?? latest.measure
 
         let headline: String
+        // The reps of the best set, not the best reps of the day: a back-off
+        // set is lighter and higher-rep, and pairing its reps with the heavy
+        // weight would name a set that never happened.
         switch measure {
         case .weight:
-            headline = "\(Self.number(latest.topWeight ?? 0)) kg × \(latest.topReps ?? 0)"
+            headline = "\(Self.number(latest.topWeight ?? 0)) kg × \(latest.topSetReps ?? 0)"
         case .assisted:
-            headline = "\(Self.number(latest.topWeight ?? 0)) kg assist × \(latest.topReps ?? 0)"
+            headline = "\(Self.number(latest.topWeight ?? 0)) kg assist × \(latest.topSetReps ?? 0)"
         case .bodyweight:
             headline = "\(latest.topReps ?? 0) reps"
         case .time:

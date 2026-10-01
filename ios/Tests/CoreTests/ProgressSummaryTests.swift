@@ -38,6 +38,16 @@ final class ProgressSummaryTests: XCTestCase {
         XCTAssertEqual(summary.headline, "70 kg × 12")
     }
 
+    /// A back-off set is lighter and usually higher-rep. The headline names
+    /// one set you actually did, so the reps have to be the reps of the
+    /// heaviest set — not the best reps from a lighter one.
+    func testTheHeadlineNamesOneRealSetNotTheBestOfEach() throws {
+        var log = Log()
+        log.session(daysAgo: 4, [(59, 12), (59, 12), (45, 15)])
+        let summary = try XCTUnwrap(log.data.progressSummary(for: log.id))
+        XCTAssertEqual(summary.headline, "59 kg × 12")
+    }
+
     func testAFirstSessionSaysSoRatherThanClaimingProgress() throws {
         var log = Log()
         log.session(daysAgo: 2, [(70, 10)])
