@@ -113,6 +113,16 @@ in pin positions plus small add-on tabs, so any number computed from a fixed
 increment is as likely to be unloadable as not — better to show what you did
 and let you type what you're doing.
 
+**It does say when the range is used up.** Double progression means the reps
+climb through the range, then the weight moves and the reps start again at the
+bottom. When every working set of the last session reached the top of the range
+*at one weight*, the exercise carries a cue — "Topped the range last time — add
+weight" — naming no number. It is deliberately quiet: a ramp up to a single
+heavy set, or a lighter back-off set carrying the high reps, is not evidence the
+working weight is ready to move, so neither earns the cue. Assisted work is told
+to take less help; bodyweight and timed work, which have no weight to add, are
+told to raise the range.
+
 **How an exercise is measured** decides what a set records:
 
 | Measure | A set needs |
@@ -264,11 +274,12 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-137 tests over the logic layer: double progression for each measure and every
-prefill across the four measures, warm-up sets never counting, set-completion rules,
+197 tests over the logic layer: the progression cue for each measure and the
+cases that must not trigger it, every prefill across the four measures, warm-up
+sets never counting, set-completion rules,
 rep ranges, estimated-max progress, personal records and when one counts as
 new, weekly sets per muscle, which workout is next, duplicating and adding to
-workouts, weight stepping, per-exercise history lookup, note propagation, the
+workouts, per-exercise history lookup, note propagation, the
 wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.

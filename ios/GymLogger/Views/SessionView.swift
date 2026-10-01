@@ -232,6 +232,14 @@ struct ExerciseCardView: View {
                     Text("\(entry.workingSets.count) × \(entry.targetText)\(entry.sets.count > entry.workingSets.count ? " + warm-up" : "") · rest \(store.data.restSec(for: entry.exerciseId))s")
                         .font(.app(13))
                         .foregroundStyle(Palette.muted)
+                    // The one thing last session can tell you that the
+                    // prefilled numbers can't: the range is used up.
+                    if let cue = store.data.progressionCue(for: entry.exerciseId) {
+                        Text(cue)
+                            .font(.app(13, weight: .semibold))
+                            .foregroundStyle(Palette.accent)
+                            .accessibilityIdentifier("cue-\(entry.name)")
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(minHeight: 44)

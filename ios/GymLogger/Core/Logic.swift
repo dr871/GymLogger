@@ -147,6 +147,41 @@ extension AppData {
         )
     }
 
+    /// Double progression: the reps climb through the range, then the weight
+    /// moves and the reps start again at the bottom. The app deliberately
+    /// doesn't name the next weight — a pin stack plus an add-on tab doesn't
+    /// move in fixed steps, so any number it invented would be one the machine
+    /// may not have. What it can say is that the range has nothing left to
+    /// give.
+    ///
+    /// Deliberately conservative: every working set has to reach the top *at
+    /// one weight*. A ramp up to a single heavy set, or a lighter back-off set
+    /// carrying the high reps, is not evidence that the working weight is
+    /// ready to move — and a cue that fires when it shouldn't is worse than no
+    /// cue at all.
+    func progressionCue(for exerciseId: String, excluding sessionId: String? = nil) -> String? {
+        guard let last = lastEntry(for: exerciseId, excluding: sessionId) else { return nil }
+        let entry = last.entry
+        guard let top = entry.targetMax else { return nil }
+
+        let done = entry.doneWorkingSets
+        guard !done.isEmpty else { return nil }
+        guard done.allSatisfy({ ($0.reps ?? 0) >= top }) else { return nil }
+
+        let measure = exercise(id: exerciseId)?.measure ?? entry.measure
+        if measure.usesWeight {
+            let weights = done.map { $0.weight ?? 0 }
+            guard Set(weights).count == 1 else { return nil }
+        }
+
+        switch measure {
+        case .weight: return "Topped the range last time — add weight"
+        case .assisted: return "Topped the range last time — less help"
+        case .bodyweight: return "Topped the range last time — raise it"
+        case .time: return "Held the top last time — raise it"
+        }
+    }
+
     // MARK: - Building
 
     func buildEntry(exerciseId: String, sets setCount: Int, targetMin: Int?, targetMax: Int?) -> SessionEntry {

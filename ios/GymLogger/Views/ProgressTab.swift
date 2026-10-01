@@ -205,7 +205,15 @@ struct ProgressTab: View {
     /// should be heading down.
     private func chartTitle(_ exercise: Exercise) -> String {
         switch exercise.measure {
-        case .weight: return "\(exercise.name) — \(metric.title.lowercased()) (\(metric.unit))"
+        case .weight:
+            // The picker already names the metric, so keep its capitalisation
+            // ("est. 1rm" reads as a typo) and don't repeat it as a unit —
+            // Reps is measured in reps.
+            let unit = metric.unit
+            guard unit.caseInsensitiveCompare(metric.title) != .orderedSame else {
+                return "\(exercise.name) — \(metric.title)"
+            }
+            return "\(exercise.name) — \(metric.title) (\(unit))"
         case .assisted: return "\(exercise.name) — best set (\(exercise.measure.unit)) · lower is better"
         case .bodyweight, .time: return "\(exercise.name) — best set (\(exercise.measure.unit))"
         }
