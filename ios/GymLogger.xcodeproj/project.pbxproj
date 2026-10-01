@@ -16,6 +16,7 @@
 		A1B2C3D40000000000000101 /* Presets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000102 /* Presets.swift */; };
 		A1B2C3D40000000000000301 /* Records.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000302 /* Records.swift */; };
 		A1B2C3D40000000000000401 /* DataFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000402 /* DataFile.swift */; };
+		A1B2C3D40000000000000601 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000602 /* Diagnostics.swift */; };
 		4AA28C02F97D3546F3506FD9 /* Decoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = B837345F55CE48086F8B9B2D /* Decoding.swift */; };
 		15DCEACAA3372188146C548E /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED8F394DA3FFC4EAC9D8A20 /* Theme.swift */; };
 		4EA230503CDA11AA6390B6CA /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E46D4C100D94E7D17B29086 /* Components.swift */; };
@@ -48,6 +49,7 @@
 		A1B2C3D40000000000000102 /* Presets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Presets.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000302 /* Records.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Records.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000402 /* DataFile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataFile.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000000602 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		B837345F55CE48086F8B9B2D /* Decoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Decoding.swift; sourceTree = "<group>"; };
 		FED8F394DA3FFC4EAC9D8A20 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		6E46D4C100D94E7D17B29086 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
@@ -112,6 +114,7 @@
 				A1B2C3D40000000000000102 /* Presets.swift */,
 				A1B2C3D40000000000000302 /* Records.swift */,
 				A1B2C3D40000000000000402 /* DataFile.swift */,
+				A1B2C3D40000000000000602 /* Diagnostics.swift */,
 				B837345F55CE48086F8B9B2D /* Decoding.swift */,
 			);
 			path = Core;
@@ -257,6 +260,7 @@
 				A1B2C3D40000000000000101 /* Presets.swift in Sources */,
 				A1B2C3D40000000000000301 /* Records.swift in Sources */,
 				A1B2C3D40000000000000401 /* DataFile.swift in Sources */,
+				A1B2C3D40000000000000601 /* Diagnostics.swift in Sources */,
 				4AA28C02F97D3546F3506FD9 /* Decoding.swift in Sources */,
 				15DCEACAA3372188146C548E /* Theme.swift in Sources */,
 				4EA230503CDA11AA6390B6CA /* Components.swift in Sources */,

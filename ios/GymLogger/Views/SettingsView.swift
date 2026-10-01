@@ -109,6 +109,36 @@ struct SettingsView: View {
                         .font(.app(13))
                         .foregroundStyle(Palette.muted)
                         .padding(.top, 12)
+
+                    SectionHeader(title: "Diagnostics")
+
+                    Text("A plain-text report: this build, how much is stored, the files on disk, and anything the app has noticed going wrong. No workout content — counts only.")
+                        .font(.app(13))
+                        .foregroundStyle(Palette.muted)
+
+                    Button("Export diagnostics (text)") {
+                        if let url = store.diagnosticsFile() {
+                            pendingExport = ExportFile(url: url)
+                        } else {
+                            exportError = "The diagnostics file couldn't be written."
+                        }
+                    }
+                    .buttonStyle(BigButtonStyle())
+                    .accessibilityIdentifier("exportDiagnostics")
+
+                    SectionHeader(title: "About")
+
+                    HStack {
+                        Text("Version")
+                            .font(.app(15))
+                            .foregroundStyle(Palette.text)
+                        Spacer()
+                        Text(Store.versionText)
+                            .font(.app(15))
+                            .foregroundStyle(Palette.muted)
+                            .accessibilityIdentifier("appVersion")
+                    }
+                    .frame(minHeight: 44)
                 }
                 .padding(.horizontal, 14)
                 .padding(.bottom, 24)

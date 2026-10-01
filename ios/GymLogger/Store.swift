@@ -26,6 +26,10 @@ final class Store: ObservableObject {
     private let file: DataFile
     private var saveTask: Task<Void, Never>?
     private let notificationDelegate = NotificationDelegate()
+    /// Kept beside the data file, in its own file: the events most worth
+    /// reading are about the data file being unreadable.
+    let diagnostics = DiagnosticLog()
+    private let diagnosticsURL: URL
 
     /// UI tests pass --uitest-reset so each run starts from the seeded workout
     /// in a throwaway file, and never touches real data or the Files-app copy.
@@ -36,8 +40,14 @@ final class Store: ObservableObject {
     init(fileURL: URL? = nil) {
         let testing = Store.isUITesting
         let url = fileURL ?? (testing ? Store.throwawayFileURL() : Store.defaultFileURL())
-        self.file = DataFile(url: url, mirror: testing ? nil : Store.backupURL())
+        let diagnosticsURL = url.deletingLastPathComponent().appendingPathComponent("diagnostics.json")
+        self.diagnosticsURL = diagnosticsURL
+        diagnostics.load(from: diagnosticsURL)
+        // The log is handed to DataFile before the first read, because the
+        // first read is where most of what's worth recording happens.
+        self.file = DataFile(url: url, mirror: testing ? nil : Store.backupURL(), log: diagnostics)
         self.data = file.load()
+        diagnostics.save(to: diagnosticsURL)
         UNUserNotificationCenter.current().delegate = notificationDelegate
         // Loaded from the mirror (or seeded)? Put a live file back straight
         // away rather than waiting for the next edit to do it.
@@ -89,8 +99,9 @@ final class Store: ObservableObject {
         do {
             try file.save(data)
         } catch {
-            print("GymLogger: save failed — \(error)")
+            note(.error, "Save failed: \(error.localizedDescription)")
         }
+        diagnostics.save(to: diagnosticsURL)
     }
 
     // MARK: - Convenience accessors
@@ -343,8 +354,96 @@ final class Store: ObservableObject {
             try data.exportJSON().write(to: url, options: .atomic)
             return url
         } catch {
+            note(.error, "Backup export failed: \(error.localizedDescription)")
             return nil
         }
+    }
+
+    // MARK: - Diagnostics
+
+    /// Record and persist in one step, so an event survives even if whatever
+    /// went wrong takes the app down immediately afterwards.
+    func note(_ level: DiagnosticEvent.Level, _ message: String) {
+        diagnostics.record(level, message)
+        diagnostics.save(to: diagnosticsURL)
+    }
+
+    /// Writes the report to a temp file for the share sheet. Plain text, so it
+    /// can be read in the share sheet's preview without sending it anywhere.
+    func diagnosticsFile() -> URL? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let name = "gymlogger-diagnostics-\(formatter.string(from: Date())).txt"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        do {
+            try Data(diagnostics.reportText(context: diagnosticContext()).utf8)
+                .write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    /// "1.0 (28)" — the same pair the IPA was built with, so a report names a
+    /// build exactly.
+    static var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
+    }
+
+    private static var deviceModel: String {
+        // On a simulator uname() reports the Mac's architecture, which tells a
+        // reader nothing. The simulator names the device it is pretending to be.
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] {
+            return "\(simulated) (simulator)"
+        }
+        var info = utsname()
+        uname(&info)
+        let model = withUnsafeBytes(of: &info.machine) { raw in
+            String(cString: raw.bindMemory(to: CChar.self).baseAddress!)
+        }
+        return model.isEmpty ? "unknown" : model
+    }
+
+    private func diagnosticContext() -> DiagnosticContext {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        let loggedSets = data.sessions.reduce(0) { $0 + $1.entries.reduce(0) { $0 + $1.doneWorkingSets.count } }
+
+        var files = [fact("data.json", file.url)]
+        if let mirror = Store.backupURL() { files.append(fact(mirror.lastPathComponent, mirror)) }
+        let folder = file.url.deletingLastPathComponent()
+        let aside = (try? FileManager.default.contentsOfDirectory(atPath: folder.path))?
+            .filter { $0.hasPrefix("data.") && $0 != "data.json" }
+            .sorted() ?? []
+        files += aside.map { fact($0, folder.appendingPathComponent($0)) }
+
+        return DiagnosticContext(
+            appVersion: Store.versionText,
+            system: "iOS \(v.majorVersion).\(v.minorVersion)",
+            device: Store.deviceModel,
+            generatedAt: Date(),
+            schemaVersion: data.version,
+            supportedSchemaVersion: AppData.schemaVersion,
+            exercises: data.exercises.count,
+            workouts: data.templates.count,
+            sessions: data.sessions.count,
+            loggedSets: loggedSets,
+            lastSession: data.sessions.compactMap(\.finishedAt).max(),
+            lastExported: data.settings.lastExportedAt,
+            files: files
+        )
+    }
+
+    private func fact(_ name: String, _ url: URL) -> FileFact {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return FileFact(name: name, exists: false, bytes: nil, modified: nil)
+        }
+        return FileFact(name: name,
+                        exists: true,
+                        bytes: (attrs[.size] as? NSNumber)?.intValue,
+                        modified: attrs[.modificationDate] as? Date)
     }
 }
 

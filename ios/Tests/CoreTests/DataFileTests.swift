@@ -31,6 +31,64 @@ final class DataFileTests: XCTestCase {
         return data
     }
 
+    // MARK: - What the log is told
+
+    /// Every one of these recoveries is deliberately invisible on screen. The
+    /// log is the only place they are recorded, so each one is checked.
+
+    func testADamagedLiveFileIsRecordedAsAnError() throws {
+        let log = DiagnosticLog()
+        file.log = log
+        try write("{ not json", to: file.url)
+        _ = file.load()
+        let messages = log.events.map(\.message).joined(separator: " | ")
+        // Two errors, both true: the file was set aside, and with no mirror to
+        // fall back on the app started empty.
+        XCTAssertTrue(log.events.allSatisfy { $0.level == .error }, messages)
+        XCTAssertTrue(log.events.contains { $0.message.contains("data.corrupt.json") }, messages)
+        XCTAssertTrue(log.events.contains { $0.message.contains("seeded workout") }, messages)
+    }
+
+    func testFallingBackToTheMirrorIsRecorded() throws {
+        let log = DiagnosticLog()
+        file.log = log
+        try file.save(seeded(note: "kept"))
+        try write("{ not json", to: file.url)
+        XCTAssertEqual(file.load().exercises[0].notes, "kept")
+        XCTAssertTrue(log.events.contains { $0.message.contains("mirror") },
+                      log.events.map(\.message).joined(separator: " | "))
+    }
+
+    func testNoUsableFileAtAllIsRecordedAsAnError() {
+        let log = DiagnosticLog()
+        file.log = log
+        _ = file.load()
+        XCTAssertTrue(log.events.contains { $0.message.contains("seeded workout") },
+                      log.events.map(\.message).joined(separator: " | "))
+    }
+
+    func testAFileFromANewerBuildIsRecordedWithBothVersions() throws {
+        let log = DiagnosticLog()
+        file.log = log
+        var data = AppData.seed()
+        data.version = AppData.schemaVersion + 2
+        try write(String(decoding: try data.exportJSON(), as: UTF8.self), to: file.url)
+        _ = file.load()
+        let message = log.events.map(\.message).joined(separator: " | ")
+        XCTAssertTrue(message.contains("schema \(AppData.schemaVersion + 2)"), message)
+        XCTAssertTrue(message.contains("supports \(AppData.schemaVersion)"), message)
+    }
+
+    /// A healthy launch should say nothing at all — a log full of routine
+    /// noise is one nobody reads.
+    func testAGoodFileRecordsNothing() throws {
+        let log = DiagnosticLog()
+        file.log = log
+        try file.save(seeded(note: "fine"))
+        _ = file.load()
+        XCTAssertEqual(log.events, [])
+    }
+
     // MARK: - Loading
 
     /// A path whose parent is a regular file, so creating the directory under

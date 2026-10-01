@@ -14,12 +14,20 @@ struct DataFile {
     let url: URL
     /// nil when there is nowhere to keep a visible copy.
     let mirror: URL?
+    /// Every recovery below is silent by design — the app carries on and the
+    /// user sees a working screen. That is right, but it leaves nothing to read
+    /// afterwards, so each one is also written down.
+    var log: DiagnosticLog?
 
     /// The live file, then the mirror, then the seeded workout. A file that
     /// decodes to nothing counts as no file: an empty app helps nobody.
     func load(now: Date = Date()) -> AppData {
-        if let data = Self.read(url, setAsideIfDamaged: true, now: now) { return data }
-        if let mirror, let data = Self.read(mirror, setAsideIfDamaged: false, now: now) { return data }
+        if let data = Self.read(url, setAsideIfDamaged: true, now: now, log: log) { return data }
+        if let mirror, let data = Self.read(mirror, setAsideIfDamaged: false, now: now, log: log) {
+            log?.record(.warning, "Loaded from the Files-app mirror — the live file was unusable", at: now)
+            return data
+        }
+        log?.record(.error, "No usable data file — started from the seeded workout", at: now)
         return .seed()
     }
 
@@ -32,14 +40,19 @@ struct DataFile {
         try encoded.write(to: url, options: .atomic)
 
         if let mirror {
-            try? FileManager.default.createDirectory(at: mirror.deletingLastPathComponent(),
-                                                     withIntermediateDirectories: true)
-            try? encoded.write(to: mirror, options: .atomic)
+            do {
+                try FileManager.default.createDirectory(at: mirror.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
+                try encoded.write(to: mirror, options: .atomic)
+            } catch {
+                log?.record(.warning, "Mirror copy could not be written: \(error.localizedDescription)")
+            }
         }
     }
 
     /// nil when the file is missing, unreadable, or holds nothing.
-    private static func read(_ url: URL, setAsideIfDamaged: Bool, now: Date) -> AppData? {
+    private static func read(_ url: URL, setAsideIfDamaged: Bool, now: Date,
+                             log: DiagnosticLog?) -> AppData? {
         guard let raw = try? Data(contentsOf: url) else { return nil }
         do {
             var decoded = try AppData.decoder().decode(AppData.self, from: raw)
@@ -55,6 +68,9 @@ struct DataFile {
                 if !FileManager.default.fileExists(atPath: kept.path) {
                     try? raw.write(to: kept, options: .atomic)
                 }
+                log?.record(.warning, "File written by schema \(decoded.version); this build supports "
+                            + "\(AppData.schemaVersion). Kept the original as \(kept.lastPathComponent)",
+                            at: now)
             }
 
             decoded.pruneExpiredTimer(at: now)
@@ -67,6 +83,8 @@ struct DataFile {
                 let aside = url.deletingPathExtension().appendingPathExtension("corrupt.json")
                 try? FileManager.default.removeItem(at: aside)
                 try? FileManager.default.moveItem(at: url, to: aside)
+                log?.record(.error, "Live file could not be read (\(error)) — kept as "
+                            + "\(aside.lastPathComponent)", at: now)
             }
             return nil
         }

@@ -224,12 +224,26 @@ is balanced.
 **Export** shares the whole store as a JSON file through the standard share
 sheet.
 
+**Diagnostics.** The app recovers from a damaged or unreadable data file on its
+own — setting the original aside, falling back to the Files-app mirror, or
+starting from the seed. That is right, but it is also silent, so every one of
+those recoveries is written to a small log. Settings › Diagnostics exports it as
+plain text, alongside the build number, how much is stored, and the files on
+disk. The log lives in its own file beside the data rather than inside it: the
+events most worth reading are about the data file being unreadable, and a log
+stored in that file would be lost exactly when it was wanted. It carries counts
+only — no exercise names, no weights — so it can be sent to someone.
+
+**Settings › About** shows the version and build, matching what `build-ipa.sh`
+stamped, so a report names a build exactly.
+
 ## Layout
 
 | Path | |
 |---|---|
 | `ios/GymLogger/Core/Models.swift` | value types for the whole data model |
 | `ios/GymLogger/Core/Logic.swift` | last-session lookup, prefill, progress series |
+| `ios/GymLogger/Core/Diagnostics.swift` | the event log and the plain-text report |
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
@@ -274,12 +288,13 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-197 tests over the logic layer: the progression cue for each measure and the
+212 tests over the logic layer: the progression cue for each measure and the
 cases that must not trigger it, every prefill across the four measures, warm-up
 sets never counting, set-completion rules,
 rep ranges, estimated-max progress, personal records and when one counts as
 new, weekly sets per muscle, which workout is next, duplicating and adding to
-workouts, per-exercise history lookup, note propagation, the
+workouts, per-exercise history lookup, note propagation, the diagnostic log
+(bounds, persistence, and that a healthy launch records nothing), the
 wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.
