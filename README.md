@@ -251,6 +251,37 @@ sent to someone.
 **Settings › About** shows the version and build, matching what `build-ipa.sh`
 stamped, so a report names a build exactly.
 
+**The widget** shows one number: how long since you last trained, with the
+workout name and this week's sets. It is the only thing the app knows that
+changes what you do from a home screen — the rest is worth looking at in the
+app, at the gym. It comes in the small home-screen size and the three
+lock-screen families.
+
+The app writes a small `WidgetSnapshot` into a shared App Group container and
+reloads the timeline only when something the widget shows has actually changed;
+saves run every few seconds during a workout and WidgetKit reloads are a budget,
+not a free call. The widget reads that snapshot and never touches the live data
+file, so it cannot be the thing that corrupts it.
+
+Two details matter for a sideloaded build:
+
+- **The App Group identifier is read at runtime, never hardcoded.** Installing
+  with a free Apple ID rewrites identifiers at signing time — SideStore appends
+  the team ID to the bundle identifier, and the group it registers is the one it
+  chose. `Shared/AppGroup.swift` reads the real identifier out of the embedded
+  provisioning profile, falling back to the declared one in the simulator. A
+  hardcoded string works on a simulator, fails silently on the phone, and looks
+  exactly like "app groups don't work on free accounts" when in fact they do.
+- **`build-ipa.sh` ad-hoc signs the result.** The signer throws that signature
+  away, but it reads the *entitlements* off what it is given, and a wholly
+  unsigned binary carries none — so the group would never be registered and the
+  widget would have nothing to read. Ad-hoc signing needs no account. The script
+  prints the app group it embedded; if that line says NONE, the widget will be
+  blank.
+
+If the group is ever missing, the widget says "Open GymLogger" rather than
+showing a confident zero.
+
 ## Layout
 
 | Path | |
@@ -258,6 +289,9 @@ stamped, so a report names a build exactly.
 | `ios/GymLogger/Core/Models.swift` | value types for the whole data model |
 | `ios/GymLogger/Core/Logic.swift` | last-session lookup, prefill, progress series |
 | `ios/GymLogger/Core/Diagnostics.swift` | the event log and the plain-text report |
+| `ios/GymLogger/Core/WidgetSnapshot.swift` | the few values the widget shows |
+| `ios/Shared/AppGroup.swift` | finds the real App Group at runtime; shared by both targets |
+| `ios/Widget/` | the WidgetKit extension |
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
@@ -302,7 +336,7 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-217 tests over the logic layer: the progression cue for each measure and the
+227 tests over the logic layer: the progression cue for each measure and the
 cases that must not trigger it, every prefill across the four measures, warm-up
 sets never counting, set-completion rules,
 rep ranges, estimated-max progress, personal records and when one counts as
@@ -310,7 +344,8 @@ new, weekly sets per muscle, which workout is next, duplicating and adding to
 workouts, per-exercise history lookup, note propagation, the diagnostic log
 (both retention windows, the hard cap, persistence across a restart, that a
 clean file read records nothing, and that the report leaks no exercise names),
-the
+the widget snapshot (whole-day counting across an evening session, and an empty
+store still producing a snapshot), the
 wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.

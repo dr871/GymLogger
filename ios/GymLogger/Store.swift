@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UserNotifications
+import WidgetKit
 
 /// Owns the single source of truth and its file on disk. All the interesting
 /// logic lives in `AppData` (Core/), which is plain Foundation and unit-tested;
@@ -30,6 +31,7 @@ final class Store: ObservableObject {
     /// reading are about the data file being unreadable.
     let diagnostics = DiagnosticLog()
     private let diagnosticsURL: URL
+    private var lastSnapshot: WidgetSnapshot?
 
     /// UI tests pass --uitest-reset so each run starts from the seeded workout
     /// in a throwaway file, and never touches real data or the Files-app copy.
@@ -49,6 +51,7 @@ final class Store: ObservableObject {
         self.data = file.load()
         diagnostics.record(.info, "Launched \(Store.versionText)")
         diagnostics.save(to: diagnosticsURL)
+        refreshWidget()
         UNUserNotificationCenter.current().delegate = notificationDelegate
         // Loaded from the mirror (or seeded)? Put a live file back straight
         // away rather than waiting for the next edit to do it.
@@ -103,6 +106,25 @@ final class Store: ObservableObject {
             note(.error, "Save failed: \(error.localizedDescription)")
         }
         diagnostics.save(to: diagnosticsURL)
+        refreshWidget()
+    }
+
+    /// Writes the shared snapshot and nudges the widget — but only when
+    /// something it shows has actually changed. Saves run every few seconds
+    /// during a workout, and WidgetKit reloads are a budget, not a free call.
+    private func refreshWidget() {
+        // UI tests run against a throwaway file so they never touch real data.
+        // The shared snapshot is real data too — a test run must not blank the
+        // widget on the device it is running on.
+        guard !Store.isUITesting else { return }
+        let snapshot = data.widgetSnapshot()
+        if var previous = lastSnapshot {
+            previous.generatedAt = snapshot.generatedAt
+            if previous == snapshot { return }
+        }
+        lastSnapshot = snapshot
+        AppGroup.write(snapshot)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     // MARK: - Convenience accessors

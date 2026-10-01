@@ -33,6 +33,23 @@ xcodebuild \
 APP="$DERIVED/Build/Products/Release-iphoneos/GymLogger.app"
 [ -d "$APP" ] || { echo "No .app produced — see $DERIVED/build.log"; exit 1; }
 
+# Ad-hoc sign so the app group travels with the build.
+#
+# The signing service or SideStore re-signs this anyway, and throws this
+# signature away — but it reads the *entitlements* off what it is given, and a
+# wholly unsigned binary carries none. Without this the app group is never
+# registered, the shared container never exists, and the widget silently shows
+# nothing. Ad-hoc signing needs no account and no profile.
+#
+# Nested code first, then the app: a signature over the bundle has to be taken
+# after everything inside it is final.
+echo "Ad-hoc signing (so the app group survives re-signing)…"
+for appex in "$APP"/PlugIns/*.appex; do
+  [ -e "$appex" ] || continue
+  codesign --force --sign - --entitlements Widget/GymLoggerWidget.entitlements "$appex"
+done
+codesign --force --sign - --entitlements GymLogger/GymLogger.entitlements "$APP"
+
 mkdir -p "$OUT_DIR"
 OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 STAGE="$DERIVED/stage"
@@ -47,5 +64,8 @@ echo
 echo "→ $OUT_DIR/GymLogger.ipa  ($(du -h "$OUT_DIR/GymLogger.ipa" | cut -f1))"
 /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist" | sed 's/^/   bundle id:  /'
 /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion'  "$APP/Info.plist" | sed 's/^/   minimum iOS: /'
+GROUP="$(codesign -d --entitlements - --xml "$APP" 2>/dev/null \
+  | tr '<>' '\n\n' | grep '^group\.' | head -1 || true)"
+echo "   app group:  ${GROUP:-NONE — the widget will have nothing to read}"
 echo "   version:    $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist")) · commit $COMMIT"
 echo "   unsigned — hand this to your signing service."
