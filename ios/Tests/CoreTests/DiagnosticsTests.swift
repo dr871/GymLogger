@@ -35,8 +35,7 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertEqual(log.events.map(\.message), ["one", "two"])
     }
 
-    /// A crash loop could record the same failure hundreds of times; the file
-    /// must not grow without end.
+    /// The hard cap, independent of age.
     func testTheOldestEventsGoOnceTheLimitIsReached() {
         let log = DiagnosticLog()
         for i in 0..<(DiagnosticLog.limit + 25) {
@@ -45,6 +44,58 @@ final class DiagnosticsTests: XCTestCase {
         XCTAssertEqual(log.events.count, DiagnosticLog.limit)
         XCTAssertEqual(log.events.first?.message, "event 25")
         XCTAssertEqual(log.events.last?.message, "event \(DiagnosticLog.limit + 24)")
+    }
+
+    // MARK: - Retention
+
+    func testRoutineEventsFallAwayAfterAWeek() {
+        let log = DiagnosticLog()
+        log.record(.info, "eight days ago", at: epoch.addingTimeInterval(-8 * 86_400))
+        log.record(.info, "yesterday", at: epoch.addingTimeInterval(-86_400))
+        log.record(.info, "now", at: epoch)
+        XCTAssertEqual(log.events.map(\.message), ["yesterday", "now"])
+    }
+
+    /// The case a 7-day window would lose: damage noticed a fortnight later.
+    func testProblemsSurviveLongerThanRoutineEvents() {
+        let log = DiagnosticLog()
+        log.record(.error, "corrupt file", at: epoch.addingTimeInterval(-20 * 86_400))
+        log.record(.warning, "mirror used", at: epoch.addingTimeInterval(-20 * 86_400))
+        log.record(.info, "launched", at: epoch.addingTimeInterval(-20 * 86_400))
+        log.record(.info, "now", at: epoch)
+        XCTAssertEqual(log.events.map(\.message), ["corrupt file", "mirror used", "now"])
+    }
+
+    func testEvenAProblemGoesEventually() {
+        let log = DiagnosticLog()
+        log.record(.error, "ancient", at: epoch.addingTimeInterval(-40 * 86_400))
+        log.record(.info, "now", at: epoch)
+        XCTAssertEqual(log.events.map(\.message), ["now"])
+    }
+
+    /// Something failing in a loop must not outgrow the cap inside the window.
+    func testAFailureLoopInsideTheWindowIsStillCapped() {
+        let log = DiagnosticLog()
+        for i in 0..<(DiagnosticLog.limit + 50) {
+            log.record(.error, "failure \(i)", at: epoch)
+        }
+        XCTAssertEqual(log.events.count, DiagnosticLog.limit)
+        XCTAssertEqual(log.events.last?.message, "failure \(DiagnosticLog.limit + 49)")
+    }
+
+    func testReopeningAfterALongGapDropsWhatExpiredWhileClosed() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("diag-\(UUID().uuidString)")
+            .appendingPathComponent("diagnostics.json")
+        let log = DiagnosticLog()
+        log.record(.info, "long ago", at: Date().addingTimeInterval(-30 * 86_400))
+        log.record(.info, "recent", at: Date())
+        log.save(to: url)
+
+        let reloaded = DiagnosticLog()
+        reloaded.load(from: url)
+        XCTAssertEqual(reloaded.events.map(\.message), ["recent"])
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 
     // MARK: - Surviving a restart

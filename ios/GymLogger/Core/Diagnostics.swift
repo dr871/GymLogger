@@ -61,8 +61,17 @@ struct DiagnosticContext {
 /// A reference type because `DataFile` holds one and writes to it from inside
 /// a read.
 final class DiagnosticLog {
-    /// Enough to cover weeks of ordinary use; small enough to read.
-    static let limit = 200
+    /// Ordinary activity is kept for a week — long enough to cover the refresh
+    /// cycle a sideloaded build lives on, short enough that the file stays
+    /// small without anyone thinking about it.
+    static let keepRoutineFor: TimeInterval = 7 * 24 * 60 * 60
+    /// Problems are kept far longer. They are rare, so they cost nothing to
+    /// hold, and they are the reason the log exists: a corruption noticed a
+    /// fortnight later is exactly the case a 7-day window would throw away.
+    static let keepProblemsFor: TimeInterval = 30 * 24 * 60 * 60
+    /// A backstop against something failing in a loop. Age alone doesn't bound
+    /// the size if an event fires a thousand times an hour.
+    static let limit = 500
 
     private(set) var events: [DiagnosticEvent]
 
@@ -70,10 +79,18 @@ final class DiagnosticLog {
         self.events = events
     }
 
-    /// Newest last. Beyond the limit the oldest go, so a burst of errors can
-    /// never push the file to an awkward size.
+    /// Newest last.
     func record(_ level: DiagnosticEvent.Level, _ message: String, at: Date = Date()) {
         events.append(DiagnosticEvent(at: at, level: level, message: message))
+        prune(now: at)
+    }
+
+    /// Age first, then the hard cap.
+    func prune(now: Date) {
+        events.removeAll { event in
+            let window = event.level == .info ? Self.keepRoutineFor : Self.keepProblemsFor
+            return now.timeIntervalSince(event.at) > window
+        }
         if events.count > Self.limit {
             events.removeFirst(events.count - Self.limit)
         }
@@ -85,7 +102,10 @@ final class DiagnosticLog {
         guard let raw = try? Data(contentsOf: url),
               let decoded = try? AppData.decoder().decode([DiagnosticEvent].self, from: raw)
         else { return }
-        events = decoded.suffix(Self.limit)
+        events = Array(decoded)
+        // A build that sat unopened for a month shouldn't reopen full of
+        // events older than the window.
+        prune(now: Date())
     }
 
     /// Best effort by design: failing to write the log must never be the reason

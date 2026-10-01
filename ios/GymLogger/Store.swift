@@ -47,6 +47,7 @@ final class Store: ObservableObject {
         // first read is where most of what's worth recording happens.
         self.file = DataFile(url: url, mirror: testing ? nil : Store.backupURL(), log: diagnostics)
         self.data = file.load()
+        diagnostics.record(.info, "Launched \(Store.versionText)")
         diagnostics.save(to: diagnosticsURL)
         UNUserNotificationCenter.current().delegate = notificationDelegate
         // Loaded from the mirror (or seeded)? Put a live file back straight
@@ -114,6 +115,7 @@ final class Store: ObservableObject {
 
     func startSession(templateId: String) {
         data.startSession(templateId: templateId)
+        note(.info, "Session started — \(data.activeSession?.entries.count ?? 0) exercises")
     }
 
     func finishSession() {
@@ -121,6 +123,8 @@ final class Store: ObservableObject {
         let id = data.activeSessionId
         data.finishSession()
         guard let id, let session = data.sessions.first(where: { $0.id == id }) else { return }
+        note(.info, "Session finished — \(session.entries.count) exercises, "
+         + "\(session.entries.reduce(0) { $0 + $1.doneWorkingSets.count }) sets")
         let records = data.recordsSet(in: id)
         guard !records.isEmpty else { return }
         let lines = records.compactMap { hit -> String? in
@@ -133,11 +137,17 @@ final class Store: ObservableObject {
     func discardSession() {
         cancelRest()
         data.discardSession()
+        note(.info, "Session discarded before finishing")
     }
 
     func deleteSession(id: String) {
         if data.activeSessionId == id { cancelRest() }
+        // Counts, so a session that disappears can be told apart from one that
+        // was deliberately deleted — which is exactly what the log was missing.
+        let sets = data.sessions.first(where: { $0.id == id })
+            .map { $0.entries.reduce(0) { $0 + $1.doneWorkingSets.count } } ?? 0
         data.deleteSession(id: id)
+        note(.info, "Session deleted — \(sets) sets, \(data.sessions.count) remaining")
     }
 
     func toggleSet(entryIndex: Int, setIndex: Int) {
@@ -208,6 +218,7 @@ final class Store: ObservableObject {
 
     func deleteExercise(id: String) {
         data.deleteExercise(id: id)
+        note(.info, "Exercise deleted — \(data.exercises.count) remaining")
     }
 
     // MARK: - Restore
@@ -230,6 +241,8 @@ final class Store: ObservableObject {
 
     func commitRestore(_ pending: PendingRestore) {
         cancelRest()
+        note(.info, "Backup restored — \(pending.data.sessions.count) sessions replaced "
+             + "\(data.sessions.count)")
         data = pending.data
         if let timer = data.timer { scheduleNotification(for: timer) }
         saveNow()
@@ -352,6 +365,7 @@ final class Store: ObservableObject {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         do {
             try data.exportJSON().write(to: url, options: .atomic)
+            note(.info, "Backup exported — \(data.sessions.count) sessions")
             return url
         } catch {
             note(.error, "Backup export failed: \(error.localizedDescription)")

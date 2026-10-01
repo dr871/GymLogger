@@ -227,12 +227,26 @@ sheet.
 **Diagnostics.** The app recovers from a damaged or unreadable data file on its
 own — setting the original aside, falling back to the Files-app mirror, or
 starting from the seed. That is right, but it is also silent, so every one of
-those recoveries is written to a small log. Settings › Diagnostics exports it as
-plain text, alongside the build number, how much is stored, and the files on
-disk. The log lives in its own file beside the data rather than inside it: the
-events most worth reading are about the data file being unreadable, and a log
-stored in that file would be lost exactly when it was wanted. It carries counts
-only — no exercise names, no weights — so it can be sent to someone.
+those recoveries is written to a small log, along with the things you do that
+can't be undone: launches, sessions started, finished, discarded and deleted,
+exercises deleted, backups exported and restored. Recording deletions is the
+point of the routine half — it is what tells a session you removed apart from a
+session that disappeared.
+
+Retention is by age, not by count. Routine events are kept for **7 days**, which
+covers the refresh cycle a sideloaded build lives on. Problems — warnings and
+errors — are kept for **30 days**, because they are rare, cost nothing to hold,
+and a corruption noticed a fortnight later is exactly the case a 7-day window
+would throw away. A hard cap of 500 events is the backstop against something
+failing in a loop. In practice an event is about 140 bytes, so a heavy week is a
+few KB.
+
+Settings › Diagnostics exports it as plain text, alongside the build number, how
+much is stored, and the files on disk. The log lives in its own file beside the
+data rather than inside it: the events most worth reading are about the data file
+being unreadable, and a log stored in that file would be lost exactly when it was
+wanted. It carries counts only — no exercise names, no weights — so it can be
+sent to someone.
 
 **Settings › About** shows the version and build, matching what `build-ipa.sh`
 stamped, so a report names a build exactly.
@@ -288,13 +302,15 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-212 tests over the logic layer: the progression cue for each measure and the
+217 tests over the logic layer: the progression cue for each measure and the
 cases that must not trigger it, every prefill across the four measures, warm-up
 sets never counting, set-completion rules,
 rep ranges, estimated-max progress, personal records and when one counts as
 new, weekly sets per muscle, which workout is next, duplicating and adding to
 workouts, per-exercise history lookup, note propagation, the diagnostic log
-(bounds, persistence, and that a healthy launch records nothing), the
+(both retention windows, the hard cap, persistence across a restart, that a
+clean file read records nothing, and that the report leaks no exercise names),
+the
 wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.
