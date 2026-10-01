@@ -33,7 +33,7 @@ struct WeightField: View {
         TextField(placeholder, text: $text)
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.center)
-            .font(.system(size: 18, weight: .regular, design: .rounded))
+            .font(.app(18, weight: .regular, design: .rounded))
             .monospacedDigit()
             .onChange(of: text) { _, newText in
                 value = WeightField.parse(newText)
@@ -74,7 +74,7 @@ struct RepsField: View {
         TextField(placeholder, text: $text)
             .keyboardType(.numberPad)
             .multilineTextAlignment(.center)
-            .font(.system(size: 18, weight: .regular, design: .rounded))
+            .font(.app(18, weight: .regular, design: .rounded))
             .monospacedDigit()
             .onChange(of: text) { _, newText in
                 value = Int(newText)
@@ -109,6 +109,8 @@ private extension View {
 /// A labelled row wrapping a text field, used throughout the editors.
 struct LabeledField<Content: View>: View {
     let label: String
+    /// Grows with the text size, or the field clips its own digits.
+    @ScaledMetric private var fieldWidth: CGFloat = 150
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -117,7 +119,7 @@ struct LabeledField<Content: View>: View {
                 .foregroundStyle(Palette.muted)
             Spacer(minLength: 8)
             content
-                .frame(maxWidth: 150)
+                .frame(maxWidth: fieldWidth)
         }
         .padding(.leading, 16)
         .padding(.trailing, 8)
@@ -132,11 +134,27 @@ struct LabeledField<Content: View>: View {
     }
 }
 
+/// Fields sit side by side normally and stack at the accessibility text sizes,
+/// where a row of them would otherwise be squeezed down to "…".
+struct AdaptiveRow<Content: View>: View {
+    var spacing: CGFloat = 10
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: spacing) { content }
+        } else {
+            HStack(spacing: spacing) { content }
+        }
+    }
+}
+
 struct SectionHeader: View {
     let title: String
     var body: some View {
         Text(title.uppercased())
-            .font(.system(size: 13, weight: .semibold))
+            .font(.app(13, weight: .semibold))
             .kerning(1.1)
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -149,7 +167,7 @@ struct EmptyHint: View {
     let text: String
     var body: some View {
         Text(text)
-            .font(.system(size: 15))
+            .font(.app(15))
             .foregroundStyle(Palette.muted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 12)

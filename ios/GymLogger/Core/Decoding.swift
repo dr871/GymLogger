@@ -22,11 +22,11 @@ extension KeyedDecodingContainer {
 // CodingKeys, and encoding still uses these so the two stay in step.
 
 extension Settings {
-    enum CodingKeys: String, CodingKey { case defaultRestSec, defaultIncrement, lastExportedAt }
+    enum CodingKeys: String, CodingKey { case defaultRestSec, lastExportedAt }
 }
 
 extension Exercise {
-    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, increment, measure, muscle }
+    enum CodingKeys: String, CodingKey { case id, name, notes, restSec, measure, muscle }
     /// Read-only: how older files said it.
     enum LegacyKeys: String, CodingKey { case isBodyweight }
 }
@@ -46,7 +46,7 @@ extension SetEntry {
 }
 
 extension SessionEntry {
-    enum CodingKeys: String, CodingKey { case id, exerciseId, name, targetMin, targetMax, note, sets, suggested, measure }
+    enum CodingKeys: String, CodingKey { case id, exerciseId, name, targetMin, targetMax, note, sets, measure }
     enum LegacyKeys: String, CodingKey { case target, bodyweight }
 }
 
@@ -69,7 +69,6 @@ extension Settings {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             defaultRestSec: c.or(.defaultRestSec, 90),
-            defaultIncrement: c.or(.defaultIncrement, 2.5),
             lastExportedAt: c.maybe(.lastExportedAt)
         )
     }
@@ -84,7 +83,6 @@ extension Exercise {
             name: c.or(.name, "Exercise"),
             notes: c.or(.notes, ""),
             restSec: c.maybe(.restSec),
-            increment: c.maybe(.increment),
             measure: c.maybe(.measure)
                 ?? (legacy.or(.isBodyweight, false) ? .bodyweight : .weight),
             muscle: c.maybe(.muscle)
@@ -144,7 +142,6 @@ extension SessionEntry {
             targetMax: c.maybe(.targetMax) ?? old,
             note: c.or(.note, ""),
             sets: c.or(.sets, []),
-            suggested: c.or(.suggested, false),
             measure: c.maybe(.measure)
                 ?? (legacy.or(.bodyweight, false) ? .bodyweight : .weight)
         )

@@ -22,14 +22,22 @@ final class Store: ObservableObject {
     @Published private(set) var notificationsAllowed = false
     @Published private(set) var notificationsDenied = false
 
-    private let fileURL: URL
+    /// Reading and writing live in Core, where they are unit-tested.
+    private let file: DataFile
     private var saveTask: Task<Void, Never>?
     private let notificationDelegate = NotificationDelegate()
 
+    /// UI tests pass --uitest-reset so each run starts from the seeded workout
+    /// in a throwaway file, and never touches real data or the Files-app copy.
+    static var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-reset")
+    }
+
     init(fileURL: URL? = nil) {
-        let url = fileURL ?? Store.defaultFileURL()
-        self.fileURL = url
-        self.data = Store.load(from: url)
+        let testing = Store.isUITesting
+        let url = fileURL ?? (testing ? Store.throwawayFileURL() : Store.defaultFileURL())
+        self.file = DataFile(url: url, mirror: testing ? nil : Store.backupURL())
+        self.data = file.load()
         UNUserNotificationCenter.current().delegate = notificationDelegate
         // Loaded from the mirror (or seeded)? Put a live file back straight
         // away rather than waiting for the next edit to do it.
@@ -44,50 +52,26 @@ final class Store: ObservableObject {
                                                  appropriateFor: nil,
                                                  create: true))
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
-        let dir = base.appendingPathComponent("GymLogger", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("data.json")
+        return base
+            .appendingPathComponent("GymLogger", isDirectory: true)
+            .appendingPathComponent("data.json")
+    }
+
+    nonisolated static func throwawayFileURL() -> URL {
+        URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("uitest-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("data.json")
     }
 
     /// A copy of the live file, kept current, in the app's Documents folder —
-    /// which iOS shows in the Files app under On My iPhone. The live file stays
-    /// private in Application Support so a stray delete in Files costs nothing.
+    /// which iOS shows in the Files app. The live file stays private in
+    /// Application Support so a stray delete in Files costs nothing.
     nonisolated static func backupURL() -> URL? {
         guard let docs = try? FileManager.default.url(for: .documentDirectory,
                                                       in: .userDomainMask,
                                                       appropriateFor: nil,
                                                       create: true) else { return nil }
         return docs.appendingPathComponent("GymLogger-backup.json")
-    }
-
-    /// The live file first; if that's missing or unreadable, the mirror kept in
-    /// Documents; only then the seed. One bad write must not cost the history
-    /// when an intact copy is sitting next door.
-    nonisolated static func load(from url: URL, mirror: URL? = Store.backupURL()) -> AppData {
-        if let data = read(url, setAsideIfCorrupt: true) { return data }
-        if let mirror, let data = read(mirror, setAsideIfCorrupt: false) { return data }
-        return .seed()
-    }
-
-    /// nil when the file is missing, empty, or can't be decoded.
-    nonisolated private static func read(_ url: URL, setAsideIfCorrupt: Bool) -> AppData? {
-        guard let raw = try? Data(contentsOf: url) else { return nil }
-        do {
-            var decoded = try AppData.decoder().decode(AppData.self, from: raw)
-            decoded.pruneExpiredTimer()
-            // An empty file is indistinguishable from a fresh install for the
-            // user, so treat it as nothing rather than a blank app.
-            return decoded.exercises.isEmpty && decoded.sessions.isEmpty ? nil : decoded
-        } catch {
-            // Unreadable: keep the original beside it rather than overwriting
-            // the only copy of someone's training history.
-            if setAsideIfCorrupt {
-                let aside = url.deletingPathExtension().appendingPathExtension("corrupt.json")
-                try? FileManager.default.removeItem(at: aside)
-                try? FileManager.default.moveItem(at: url, to: aside)
-            }
-            return nil
-        }
     }
 
     private func scheduleSave() {
@@ -103,11 +87,7 @@ final class Store: ObservableObject {
         saveTask?.cancel()
         saveTask = nil
         do {
-            let encoded = try data.exportJSON()
-            try encoded.write(to: fileURL, options: .atomic)
-            if let backup = Store.backupURL() {
-                try? encoded.write(to: backup, options: .atomic)
-            }
+            try file.save(data)
         } catch {
             print("GymLogger: save failed — \(error)")
         }
@@ -168,29 +148,6 @@ final class Store: ObservableObject {
         }
     }
 
-    /// Reverts the prefilled bump back to last session's weight for sets not yet
-    /// ticked — the explicit "ignore the suggestion" escape hatch.
-    func ignoreSuggestion(entryIndex: Int) {
-        guard let s = data.activeSessionIndex,
-              data.sessions[s].entries.indices.contains(entryIndex) else { return }
-
-        let entry = data.sessions[s].entries[entryIndex]
-        let suggestion = data.suggestion(for: entry.exerciseId, excluding: data.sessions[s].id,
-                                         targetMin: entry.targetMin, targetMax: entry.targetMax)
-        let last = data.lastEntry(for: entry.exerciseId, excluding: data.sessions[s].id)?.entry
-
-        data.sessions[s].entries[entryIndex].suggested = false
-        for i in data.sessions[s].entries[entryIndex].sets.indices
-        where !data.sessions[s].entries[entryIndex].sets[i].done {
-            if entry.measure.usesWeight {
-                data.sessions[s].entries[entryIndex].sets[i].weight = suggestion.lastWeight
-            }
-            // Back to last time's reps, set for set.
-            let previous = last.flatMap { $0.sets.indices.contains(i) ? $0.sets[i].reps : nil }
-            data.sessions[s].entries[entryIndex].sets[i].reps = previous ?? suggestion.lastReps
-        }
-    }
-
     func addSet(entryIndex: Int) {
         guard let s = data.activeSessionIndex,
               data.sessions[s].entries.indices.contains(entryIndex) else { return }
@@ -201,24 +158,11 @@ final class Store: ObservableObject {
         )
     }
 
-    func addWarmup(entryIndex: Int) {
-        guard let s = data.activeSessionIndex else { return }
-        data.addWarmup(sessionIndex: s, entryIndex: entryIndex)
-    }
-
     func toggleWarmup(entryIndex: Int, setIndex: Int) {
         guard let s = data.activeSessionIndex,
               data.sessions[s].entries.indices.contains(entryIndex),
               data.sessions[s].entries[entryIndex].sets.indices.contains(setIndex) else { return }
         data.sessions[s].entries[entryIndex].sets[setIndex].warmup.toggle()
-    }
-
-    /// ± the exercise's increment on every set not yet ticked.
-    func stepWeight(entryIndex: Int, up: Bool) {
-        guard let s = data.activeSessionIndex,
-              data.sessions[s].entries.indices.contains(entryIndex) else { return }
-        let step = data.increment(for: data.sessions[s].entries[entryIndex].exerciseId)
-        data.adjustWeight(sessionIndex: s, entryIndex: entryIndex, by: up ? step : -step)
     }
 
     func removeSet(entryIndex: Int) {
@@ -278,6 +222,11 @@ final class Store: ObservableObject {
         data = pending.data
         if let timer = data.timer { scheduleNotification(for: timer) }
         saveNow()
+    }
+
+    /// Plain-text summary of a finished session, for the share sheet.
+    func shareText(sessionId: String) -> String? {
+        data.shareText(for: sessionId)
     }
 
     func markExported() {

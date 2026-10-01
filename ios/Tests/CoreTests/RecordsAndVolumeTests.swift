@@ -101,17 +101,18 @@ final class PersonalRecordTests: XCTestCase {
         let tie = b.log(daysAgo: 5, [(80, 10)])
         let better = b.log(daysAgo: 3, [(82.5, 10)])
 
-        XCTAssertEqual(b.data.recordsSet(in: first).map(\.record.kind).sorted { $0.rawValue < $1.rawValue },
-                       [.estimatedMax, .heaviest], "the first session sets the baseline")
+        XCTAssertTrue(b.data.recordsSet(in: first).isEmpty, "a baseline isn't a record")
         XCTAssertTrue(b.data.recordsSet(in: tie).isEmpty, "matching a record isn't setting one")
-        XCTAssertEqual(b.data.recordsSet(in: better).count, 2)
+        XCTAssertEqual(b.data.recordsSet(in: better).map(\.record.kind), [.heaviest],
+                       "one line per exercise, the heaviest set leading")
     }
 
     func testRecordsSetInASessionIgnoreLaterSessions() {
         var b = Bench(measure: .weight)
+        b.log(daysAgo: 9, [(80, 10)])
         let middle = b.log(daysAgo: 5, [(85, 10)])
         b.log(daysAgo: 1, [(90, 10)])
-        XCTAssertEqual(b.data.recordsSet(in: middle).count, 2, "judged against what came before it, not after")
+        XCTAssertEqual(b.data.recordsSet(in: middle).count, 1, "judged against what came before it, not after")
     }
 }
 

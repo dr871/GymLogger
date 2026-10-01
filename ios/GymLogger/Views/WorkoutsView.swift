@@ -30,7 +30,7 @@ struct WorkoutsView: View {
                     .padding(.top, 4)
 
                 Text("Add a standard workout to start from, then change anything in it.")
-                    .font(.system(size: 13))
+                    .font(.app(13))
                     .foregroundStyle(Palette.muted)
             }
             .padding(.horizontal, 14)
@@ -67,7 +67,7 @@ struct NewWorkoutSheet: View {
                     }
 
                     Text("You pick which exercises to bring in. Ones you already have are reused, not duplicated.")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
 
                     SectionHeader(title: "Or start empty")
@@ -96,17 +96,18 @@ struct NewWorkoutSheet: View {
 struct WorkoutRow: View {
     let name: String
     let detail: String
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
                     .foregroundStyle(Palette.text)
                 Text(detail)
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Palette.muted)
-                    .lineLimit(1)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
             }
             Spacer()
             Image(systemName: "chevron.right").foregroundStyle(Palette.ghost)
@@ -145,7 +146,7 @@ struct PresetDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text(preset.summary)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Palette.muted)
                     Spacer()
                     Button(chosen.count == preset.items.count ? "None" : "All") {
@@ -166,15 +167,15 @@ struct PresetDetailView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: chosen.contains(item.exerciseName) ? "checkmark.circle.fill" : "circle")
-                                .font(.system(size: 22))
+                                .font(.app(22))
                                 .foregroundStyle(chosen.contains(item.exerciseName) ? Palette.accent : Palette.ghost)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.exerciseName)
-                                    .font(.system(size: 17, weight: .semibold))
+                                    .font(.app(17, weight: .semibold))
                                     .foregroundStyle(Palette.text)
                                 Text("\(item.sets) × \(item.targetText)\(store.data.exercises.contains { $0.name.compare(item.exerciseName, options: .caseInsensitive) == .orderedSame } ? " · already in your library" : "")")
-                                    .font(.system(size: 14))
+                                    .font(.app(14))
                                     .foregroundStyle(Palette.muted)
                                     .lineLimit(1)
                             }

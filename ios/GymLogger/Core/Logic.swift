@@ -1,29 +1,46 @@
 import Foundation
 
-/// What last session says about what to do today. Double progression: climb
-/// the rep range at one weight, and once every set reaches the top, move the
-/// weight and drop back to the bottom of the range.
-struct Suggestion: Equatable {
-    /// What to prefill as the weight (for assisted work, the assistance): last
-    /// session's best, or that moved by the increment when the bump was earned.
-    /// nil when there is nothing to go on, or the measure has no weight.
+/// What you did last time. Today's fields are prefilled from this and nothing
+/// else: gym stacks move in pin positions plus small add-on tabs, so any
+/// weight the app computed for you would as likely be unloadable as not.
+struct LastTime: Equatable {
+    /// Last session's best weight — heaviest, or least assistance.
     var weight: Double?
-    /// Last session's best weight, for the "keep it here" escape hatch.
-    var lastWeight: Double?
-    /// What to prefill as reps (seconds for timed work) when earned; nil means
-    /// repeat last session set for set.
-    var reps: Int? = nil
-    /// Last session's best rep count.
-    var lastReps: Int? = nil
-    /// True when an increase is proposed.
-    var earned: Bool
+    /// Last session's best rep count, or seconds for timed work.
+    var reps: Int?
 
-    static let none = Suggestion(weight: nil, lastWeight: nil, earned: false)
+    static let none = LastTime(weight: nil, reps: nil)
 }
 
 struct LastEntry: Equatable {
     var entry: SessionEntry
     var session: Session
+}
+
+/// What the progress chart can plot. Weight alone is a poor line for anyone
+/// who varies load across sets: it can sit flat for months while the reps
+/// underneath it climb.
+enum ProgressMetric: String, CaseIterable, Identifiable {
+    case estimatedMax, heaviest, reps, volume
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .estimatedMax: return "Est. 1RM"
+        case .heaviest: return "Heaviest"
+        case .reps: return "Reps"
+        case .volume: return "Volume"
+        }
+    }
+
+    var unit: String {
+        switch self {
+        case .estimatedMax, .heaviest: return "kg"
+        case .reps: return "reps"
+        case .volume: return "kg lifted"
+        }
+    }
 }
 
 struct ProgressPoint: Identifiable, Equatable {
@@ -33,18 +50,40 @@ struct ProgressPoint: Identifiable, Equatable {
     /// The heaviest set — or, for assisted work, the one with the least help.
     var topWeight: Double?
     var topReps: Int?
+    /// Reps of the best set, so a point can be labelled with the set that
+    /// produced it rather than only the number derived from it.
+    var topSetReps: Int?
     /// Best estimated one-rep max across the session's working sets.
     var bestEstimatedMax: Double?
+    /// Weight × reps summed over the working sets; nil when nothing was loaded.
+    var volume: Double?
     var setCount: Int
 
-    /// What to plot. Weighted work plots the estimated max, so the line moves
-    /// while reps climb at one weight rather than only when the weight does.
+    /// What to plot by default. Weighted work plots the estimated max, so the
+    /// line moves while reps climb at one weight rather than only when the
+    /// weight does.
     var value: Double? {
         switch measure {
         case .weight: return bestEstimatedMax
         case .assisted: return topWeight
         case .bodyweight, .time: return topReps.map(Double.init)
         }
+    }
+
+    func value(for metric: ProgressMetric) -> Double? {
+        switch metric {
+        case .estimatedMax: return bestEstimatedMax
+        case .heaviest: return topWeight
+        case .reps: return topReps.map(Double.init)
+        case .volume: return volume
+        }
+    }
+
+    /// "60×12" — the set the plotted number came from.
+    var topSetText: String? {
+        guard let topWeight, let topSetReps else { return nil }
+        let w = topWeight == topWeight.rounded() ? "\(Int(topWeight))" : "\(topWeight)"
+        return "\(w)×\(topSetReps)"
     }
 }
 
@@ -64,9 +103,6 @@ extension AppData {
         exercise(id: exerciseId)?.restSec ?? settings.defaultRestSec
     }
 
-    func increment(for exerciseId: String) -> Double {
-        exercise(id: exerciseId)?.increment ?? settings.defaultIncrement
-    }
 
     var activeSession: Session? {
         guard let id = activeSessionId else { return nil }
@@ -95,96 +131,74 @@ extension AppData {
         return nil
     }
 
-    /// `targetMin`/`targetMax` are today's range, used for where reps land
-    /// after a bump and for capping rep-only progress. "Did they hit the top"
-    /// is judged against the range the last session was actually aiming at.
-    func suggestion(for exerciseId: String, excluding sessionId: String? = nil,
-                    targetMin: Int? = nil, targetMax: Int? = nil) -> Suggestion {
+    /// Last session's best set for this exercise, used to prefill today.
+    func lastTime(for exerciseId: String, excluding sessionId: String? = nil) -> LastTime {
         guard let last = lastEntry(for: exerciseId, excluding: sessionId) else { return .none }
 
         let entry = last.entry
         let measure = exercise(id: exerciseId)?.measure ?? entry.measure
-        // Warm-ups are logged but never judged.
+        // Warm-ups are logged but never counted as what you lifted.
         let done = entry.doneWorkingSets
-        let allSetsDone = !done.isEmpty && done.count == entry.workingSets.count
-        let topReps = done.compactMap(\.reps).max()
-        let bottomToday = targetMin ?? entry.targetMin
-        let step = increment(for: exerciseId)
+        let weights = done.compactMap(\.weight)
 
-        // Every set ticked, every set at or above the top of the range.
-        let top = entry.targetMax ?? targetMax
-        let hitTop = top.map { t in done.allSatisfy { ($0.reps ?? 0) >= t } } ?? false
-
-        switch measure {
-        case .weight:
-            let best = done.compactMap(\.weight).max()
-            let earned = allSetsDone && hitTop && best != nil
-            return Suggestion(
-                weight: earned ? best.map { round2($0 + step) } : best,
-                lastWeight: best,
-                reps: earned ? (bottomToday ?? topReps) : nil,
-                lastReps: topReps,
-                earned: earned
-            )
-
-        case .assisted:
-            // The best set is the one that needed the least help.
-            let best = done.compactMap(\.weight).min()
-            var earned = allSetsDone && hitTop && best != nil
-            var next = best
-            if earned, let best {
-                let less = round2(max(0, best - step))
-                if less < best { next = less } else { earned = false }   // already unassisted
-            }
-            return Suggestion(
-                weight: next,
-                lastWeight: best,
-                reps: earned ? (bottomToday ?? topReps) : nil,
-                lastReps: topReps,
-                earned: earned
-            )
-
-        case .bodyweight, .time:
-            // No weight to move, so the reps themselves climb: once every set
-            // matches the best, ask for one more (five more seconds), and stop
-            // at the top of the range.
-            guard let best = topReps else { return .none }
-            let uniform = allSetsDone && done.allSatisfy { ($0.reps ?? 0) >= best }
-            var next = best + (measure == .time ? 5 : 1)
-            if let cap = targetMax ?? entry.targetMax { next = min(next, cap) }
-            let earned = uniform && next > best
-            return Suggestion(
-                weight: nil,
-                lastWeight: nil,
-                reps: earned ? next : nil,
-                lastReps: best,
-                earned: earned
-            )
-        }
+        return LastTime(
+            weight: measure == .assisted ? weights.min() : weights.max(),
+            reps: done.compactMap(\.reps).max()
+        )
     }
 
-    private func round2(_ x: Double) -> Double { (x * 100).rounded() / 100 }
+    /// Double progression: the reps climb through the range, then the weight
+    /// moves and the reps start again at the bottom. The app deliberately
+    /// doesn't name the next weight — a pin stack plus an add-on tab doesn't
+    /// move in fixed steps, so any number it invented would be one the machine
+    /// may not have. What it can say is that the range has nothing left to
+    /// give.
+    ///
+    /// Deliberately conservative: every working set has to reach the top *at
+    /// one weight*. A ramp up to a single heavy set, or a lighter back-off set
+    /// carrying the high reps, is not evidence that the working weight is
+    /// ready to move — and a cue that fires when it shouldn't is worse than no
+    /// cue at all.
+    func progressionCue(for exerciseId: String, excluding sessionId: String? = nil) -> String? {
+        guard let last = lastEntry(for: exerciseId, excluding: sessionId) else { return nil }
+        let entry = last.entry
+        guard let top = entry.targetMax else { return nil }
+
+        let done = entry.doneWorkingSets
+        guard !done.isEmpty else { return nil }
+        guard done.allSatisfy({ ($0.reps ?? 0) >= top }) else { return nil }
+
+        let measure = exercise(id: exerciseId)?.measure ?? entry.measure
+        if measure.usesWeight {
+            let weights = done.map { $0.weight ?? 0 }
+            guard Set(weights).count == 1 else { return nil }
+        }
+
+        switch measure {
+        case .weight: return "Topped the range last time — add weight"
+        case .assisted: return "Topped the range last time — less help"
+        case .bodyweight: return "Topped the range last time — raise it"
+        case .time: return "Held the top last time — raise it"
+        }
+    }
 
     // MARK: - Building
 
     func buildEntry(exerciseId: String, sets setCount: Int, targetMin: Int?, targetMax: Int?) -> SessionEntry {
-        let suggestion = suggestion(for: exerciseId, targetMin: targetMin, targetMax: targetMax)
+        let lastTime = lastTime(for: exerciseId)
         let last = lastEntry(for: exerciseId)?.entry.workingSets
         let measure = exercise(id: exerciseId)?.measure ?? .weight
 
-        // Prefilled so repeating, or taking the bump, needs no typing. A bump
-        // sets every set the same; otherwise it's last time, set for set; and a
-        // first session starts at the bottom of the range.
+        // Last session, set for set — weight as well as reps. Loading the same
+        // ramp or drop-off you actually did beats prefilling your best set
+        // three times and making you correct the last one every session. Sets
+        // beyond what was logged fall back to last session's best, and a first
+        // session starts at the bottom of the range.
         let sets = (0..<max(1, setCount)).map { i -> SetEntry in
-            let reps: Int?
-            if let bumped = suggestion.reps {
-                reps = bumped
-            } else if let last, let previous = (last.indices.contains(i) ? last[i].reps : nil) ?? suggestion.lastReps {
-                reps = previous
-            } else {
-                reps = targetMin ?? targetMax
-            }
-            return SetEntry(weight: measure.usesWeight ? suggestion.weight : nil, reps: reps, done: false)
+            let previous = last.flatMap { $0.indices.contains(i) ? $0[i] : nil }
+            let weight = previous?.weight ?? lastTime.weight
+            let reps = previous?.reps ?? lastTime.reps ?? targetMin ?? targetMax
+            return SetEntry(weight: measure.usesWeight ? weight : nil, reps: reps, done: false)
         }
 
         return SessionEntry(
@@ -194,7 +208,6 @@ extension AppData {
             targetMax: targetMax,
             note: exercise(id: exerciseId)?.notes ?? "",
             sets: sets,
-            suggested: suggestion.earned,
             measure: measure
         )
     }
@@ -324,28 +337,7 @@ extension AppData {
 
     // MARK: - In-session edits
 
-    /// Inserts a warm-up at the top of an entry: roughly half the working
-    /// weight, rounded to the increment, reps at the bottom of the range.
-    mutating func addWarmup(sessionIndex s: Int, entryIndex e: Int) {
-        guard sessions.indices.contains(s), sessions[s].entries.indices.contains(e) else { return }
-        let entry = sessions[s].entries[e]
-        var weight: Double?
-        if entry.measure.usesWeight, let working = entry.workingSets.first?.weight, working > 0 {
-            let step = increment(for: entry.exerciseId)
-            weight = step > 0 ? (working / 2 / step).rounded() * step : working / 2
-        }
-        let reps = entry.targetMin ?? entry.workingSets.first?.reps
-        sessions[s].entries[e].sets.insert(SetEntry(weight: weight, reps: reps, done: false, warmup: true), at: 0)
-    }
 
-    /// ± the increment on every set not yet ticked, never below zero.
-    mutating func adjustWeight(sessionIndex s: Int, entryIndex e: Int, by delta: Double) {
-        guard sessions.indices.contains(s), sessions[s].entries.indices.contains(e) else { return }
-        for i in sessions[s].entries[e].sets.indices where !sessions[s].entries[e].sets[i].done {
-            let current = sessions[s].entries[e].sets[i].weight ?? 0
-            sessions[s].entries[e].sets[i].weight = round2(max(0, current + delta))
-        }
-    }
 
     // MARK: - Housekeeping
 
@@ -368,13 +360,19 @@ extension AppData {
                 guard let w = set.weight, w > 0, let r = set.reps, r > 0 else { return nil }
                 return AppData.estimatedMax(weight: w, reps: r)
             }
+            let best = entry.measure == .assisted ? weights.min() : weights.max()
+            let volume = done.reduce(into: 0.0) { total, set in
+                if let w = set.weight, let r = set.reps { total += w * Double(r) }
+            }
             return ProgressPoint(
                 id: session.id,
                 date: session.startedAt,
                 measure: entry.measure,
-                topWeight: entry.measure == .assisted ? weights.min() : weights.max(),
+                topWeight: best,
                 topReps: done.compactMap(\.reps).max(),
+                topSetReps: done.filter { $0.weight == best }.compactMap(\.reps).max(),
                 bestEstimatedMax: estimates.max(),
+                volume: weights.isEmpty ? nil : volume,
                 setCount: done.count
             )
         }
@@ -432,6 +430,10 @@ enum RestoreError: Error, Equatable {
     case unreadable
     /// Decoded, but there is nothing in it — restoring would only wipe.
     case empty
+    /// Written by a newer build. Decoding drops what it doesn't recognise, so
+    /// accepting it would quietly strip fields while keeping the higher version
+    /// number — the file would then claim to be something it no longer is.
+    case tooNew(fileVersion: Int, appVersion: Int)
 }
 
 extension AppData {
@@ -455,6 +457,9 @@ extension AppData {
         }
         guard !decoded.exercises.isEmpty || !decoded.sessions.isEmpty else {
             throw RestoreError.empty
+        }
+        guard decoded.version <= AppData.schemaVersion else {
+            throw RestoreError.tooNew(fileVersion: decoded.version, appVersion: AppData.schemaVersion)
         }
         // A session id that points at nothing is a leftover, not state.
         if decoded.activeSession == nil { decoded.activeSessionId = nil }

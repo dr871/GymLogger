@@ -35,19 +35,18 @@ private struct Rig {
 /// volume, or "did this session do this exercise".
 final class WarmupSetTests: XCTestCase {
 
-    func testAWarmupNeverEarnsTheBump() {
+    func testAWarmupIsNotWhatYouLifted() {
         var r = Rig()
         r.log(daysAgo: 2, warmups: [(40, 12), (60, 12)], [(80, 12), (80, 12), (80, 12)])
-        let s = r.data.suggestion(for: r.exerciseId)
-        XCTAssertTrue(s.earned)
-        XCTAssertEqual(s.weight, 82.5)
-        XCTAssertEqual(s.lastWeight, 80, "the 60 kg warm-up is not last time's weight")
+        let last = r.data.lastTime(for: r.exerciseId)
+        XCTAssertEqual(last.weight, 80, "the 60 kg warm-up is not last time's weight")
+        XCTAssertEqual(last.reps, 12)
     }
 
-    func testAMissedWarmupDoesNotBlockTheBump() {
+    func testAShortWarmupDoesNotDragPrefillDown() {
         var r = Rig()
         r.log(daysAgo: 2, warmups: [(40, 5)], [(80, 12), (80, 12), (80, 12)])
-        XCTAssertTrue(r.data.suggestion(for: r.exerciseId).earned, "5 reps on a warm-up isn't a failed set")
+        XCTAssertEqual(r.data.lastTime(for: r.exerciseId).reps, 12, "5 reps on a warm-up isn't a working set")
     }
 
     func testWarmupsAreLeftOutOfRecordsVolumeAndProgress() {
@@ -74,31 +73,6 @@ final class WarmupSetTests: XCTestCase {
         let entry = r.data.activeSession!.entries[0]
         XCTAssertEqual(entry.sets.map(\.reps), [12, 11, 10], "aligned to last time's working sets, not its warm-up")
         XCTAssertTrue(entry.sets.allSatisfy { !$0.warmup })
-    }
-
-    func testAddingAWarmupPutsItFirstAtRoughlyHalfTheLoad() {
-        var r = Rig()
-        r.log(daysAgo: 2, [(80, 12), (80, 12), (80, 12)])
-        r.data.startSession(templateId: r.data.templates[0].id)
-        let s = r.data.activeSessionIndex!
-
-        r.data.addWarmup(sessionIndex: s, entryIndex: 0)
-
-        let sets = r.data.sessions[s].entries[0].sets
-        XCTAssertEqual(sets.count, 4)
-        XCTAssertTrue(sets[0].warmup)
-        XCTAssertEqual(sets[0].weight, 42.5, "half of 82.5, rounded to the 2.5 kg increment")
-        XCTAssertEqual(sets[0].reps, 8, "bottom of the range")
-        XCTAssertFalse(sets[0].done)
-    }
-
-    func testAWarmupWithNoWorkingWeightHasNoWeight() {
-        var r = Rig(measure: .bodyweight, range: (5, 8))
-        r.data.startSession(templateId: r.data.templates[0].id)
-        let s = r.data.activeSessionIndex!
-        r.data.addWarmup(sessionIndex: s, entryIndex: 0)
-        XCTAssertNil(r.data.sessions[s].entries[0].sets[0].weight)
-        XCTAssertEqual(r.data.sessions[s].entries[0].sets[0].reps, 5)
     }
 
     func testWarmupsStillNeedTheirNumbersToBeTicked() {
@@ -265,47 +239,6 @@ final class TemplateEditingTests: XCTestCase {
     }
 }
 
-/// ± by the increment, applied to every set not yet ticked.
-final class WeightSteppingTests: XCTestCase {
-
-    private func active() -> (AppData, Int) {
-        var r = Rig()
-        r.log(daysAgo: 2, [(80, 10), (80, 10), (80, 10)])
-        r.data.startSession(templateId: r.data.templates[0].id)
-        return (r.data, r.data.activeSessionIndex!)
-    }
-
-    func testStepsEveryPendingSet() {
-        var (data, s) = active()
-        data.sessions[s].entries[0].sets[0].done = true
-        data.adjustWeight(sessionIndex: s, entryIndex: 0, by: 2.5)
-        XCTAssertEqual(data.sessions[s].entries[0].sets.map(\.weight), [80, 82.5, 82.5])
-        data.adjustWeight(sessionIndex: s, entryIndex: 0, by: -5)
-        XCTAssertEqual(data.sessions[s].entries[0].sets.map(\.weight), [80, 77.5, 77.5])
-    }
-
-    func testAnEmptyWeightStepsFromZero() {
-        var data = AppData.seed()
-        data.startSession(templateId: data.templates[0].id)
-        let s = data.activeSessionIndex!
-        data.adjustWeight(sessionIndex: s, entryIndex: 0, by: 2.5)
-        XCTAssertEqual(data.sessions[s].entries[0].sets[0].weight, 2.5)
-    }
-
-    func testNeverBelowZero() {
-        var (data, s) = active()
-        data.adjustWeight(sessionIndex: s, entryIndex: 0, by: -500)
-        XCTAssertEqual(data.sessions[s].entries[0].sets.map(\.weight), [0, 0, 0])
-    }
-
-    func testWarmupsStepToo() {
-        var (data, s) = active()
-        data.addWarmup(sessionIndex: s, entryIndex: 0)
-        data.adjustWeight(sessionIndex: s, entryIndex: 0, by: 2.5)
-        XCTAssertEqual(data.sessions[s].entries[0].sets[0].weight, 42.5)
-    }
-}
-
 final class SchemaVersionTests: XCTestCase {
     func testNewFilesSayVersionTwo() {
         XCTAssertEqual(AppData.seed().version, 2)
@@ -316,5 +249,66 @@ final class SchemaVersionTests: XCTestCase {
         let decoded = try AppData.decoder().decode(AppData.self, from: Data(json.utf8))
         XCTAssertEqual(decoded.version, 1)
         XCTAssertEqual(decoded.exercises[0].measure, .bodyweight)
+    }
+}
+
+/// The chart metrics, exercised with a real session shape: ramp up, hold, then
+/// drop the last set — which is where a weight-only line goes quiet.
+final class ProgressMetricTests: XCTestCase {
+
+    private func series(_ sets: [(Double?, Int)], measure: Measure = .weight) -> ProgressPoint {
+        var data = AppData()
+        let exercise = Exercise(name: "Leg press", measure: measure)
+        data.exercises = [exercise]
+        data.templates = [WorkoutTemplate(name: "T", items: [
+            TemplateItem(exerciseId: exercise.id, sets: sets.count, targetMin: 8, targetMax: 12)
+        ])]
+        data.startSession(templateId: data.templates[0].id)
+        let i = data.activeSessionIndex!
+        for (n, set) in sets.enumerated() {
+            data.sessions[i].entries[0].sets[n].weight = set.0
+            data.sessions[i].entries[0].sets[n].reps = set.1
+            data.sessions[i].entries[0].sets[n].done = true
+        }
+        data.finishSession()
+        return data.progressSeries(for: exercise.id)[0]
+    }
+
+    func testTopSetRepsComeFromTheHeaviestSetNotTheMostReps() {
+        let point = series([(59, 12), (59, 12), (45, 15)])
+        XCTAssertEqual(point.topWeight, 59)
+        XCTAssertEqual(point.topSetReps, 12, "the 15 was done at 45 kg")
+        XCTAssertEqual(point.topReps, 15, "which is still the most reps")
+        XCTAssertEqual(point.topSetText, "59×12")
+    }
+
+    func testVolumeSumsEverySet() {
+        let point = series([(59, 12), (59, 12), (45, 15)])
+        XCTAssertEqual(point.volume, 2091)   // 59×12 + 59×12 + 45×15
+    }
+
+    func testBodyweightWorkHasNoVolume() {
+        let point = series([(nil, 40), (nil, 40)], measure: .time)
+        XCTAssertNil(point.volume)
+        XCTAssertNil(point.topSetText)
+    }
+
+    func testEachMetricReadsItsOwnNumber() {
+        let point = series([(59, 12), (59, 12), (45, 15)])
+        XCTAssertEqual(point.value(for: .heaviest), 59)
+        XCTAssertEqual(point.value(for: .reps), 15)
+        XCTAssertEqual(point.value(for: .volume), 2091)
+        XCTAssertEqual(point.value(for: .estimatedMax) ?? 0,
+                       AppData.estimatedMax(weight: 59, reps: 12), accuracy: 0.01)
+    }
+
+    /// A weight that never moves is exactly the case the switcher exists for.
+    func testAFlatWeightStillMovesOnRepsAndVolume() {
+        let a = series([(27, 8), (27, 8), (27, 8)])
+        let b = series([(27, 12), (27, 9), (27, 7)])
+
+        XCTAssertEqual(a.value(for: .heaviest), b.value(for: .heaviest), "weight line is flat")
+        XCTAssertGreaterThan(b.value(for: .volume)!, a.value(for: .volume)!)
+        XCTAssertGreaterThan(b.value(for: .reps)!, a.value(for: .reps)!)
     }
 }

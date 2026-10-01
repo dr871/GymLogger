@@ -47,6 +47,14 @@ A copy of the live data is also kept current in the **Files** app, under On My
 iPhone → GymLogger → `GymLogger-backup.json`, so you can copy it out without
 opening the app. Deleting that copy is harmless; the live file is elsewhere.
 
+**A file from a newer build is never quietly downgraded.** Decoding drops what
+it doesn't recognise, so restoring a newer backup would strip fields while
+keeping the higher version number — the file would then claim to be something
+it no longer is. Restore refuses it and says so. If the *live* file turns out
+to be newer (easy to hit when a free-account build is reinstalled weekly), the
+app still opens, but keeps the original verbatim as `data.v<N>.json` first, so
+the next save can't write the loss back over it.
+
 ## Sideloading (no Mac at install time)
 
 ```sh
@@ -96,37 +104,43 @@ set. The lookup is per-exercise, not per-session — it finds the most recent
 finished session that actually logged *that movement*, so skipping a machine or
 running a different template doesn't break the target.
 
-**Every exercise has a rep range** (e.g. 8–12; seconds for timed work) and
-**progression is double progression**: climb the range at one weight, and once
-every set hits the top, the weight moves and reps drop back to the bottom.
-Today's fields come prefilled accordingly — last session's numbers set for set
-while you're climbing, or the bump when it's earned, with a *Keep 80 kg* button
-to hold. A fixed target is just a range with equal ends, and no range means no
-bump is ever suggested.
+**Every exercise has a rep range** (e.g. 8–12; seconds for timed work) — a
+target to aim at, not a rule the app enforces.
 
-**How an exercise is measured** decides what a set records and what moves:
+**The app never proposes a weight.** Today's fields open prefilled with last
+session, set for set, and you change what you want to change. Gym stacks move
+in pin positions plus small add-on tabs, so any number computed from a fixed
+increment is as likely to be unloadable as not — better to show what you did
+and let you type what you're doing.
 
-| Measure | A set needs | When every set hits the top of the range |
-|---|---|---|
-| Weight | weight > 0, reps > 0 | weight + increment, reps back to the bottom |
-| Assisted | assistance ≥ 0 (0 = unassisted), reps > 0 | assistance − increment, down to 0 |
-| Bodyweight | reps > 0 | +1 rep, up to the top of the range |
-| Time | seconds > 0 | +5s, up to the top of the range |
+**It does say when the range is used up.** Double progression means the reps
+climb through the range, then the weight moves and the reps start again at the
+bottom. When every working set of the last session reached the top of the range
+*at one weight*, the exercise carries a cue — "Topped the range last time — add
+weight" — naming no number. It is deliberately quiet: a ramp up to a single
+heavy set, or a lighter back-off set carrying the high reps, is not evidence the
+working weight is ready to move, so neither earns the cue. Assisted work is told
+to take less help; bodyweight and timed work, which have no weight to add, are
+told to raise the range.
 
-For bodyweight and timed work there is no weight to move, so "hitting the top"
-means every set matched your best; the reps themselves climb until the range is
-full. Assisted and timed exercises hide or relabel the boxes to suit.
+**How an exercise is measured** decides what a set records:
+
+| Measure | A set needs |
+|---|---|
+| Weight | weight > 0, reps > 0 |
+| Assisted | assistance ≥ 0 (0 = unassisted), reps > 0 |
+| Bodyweight | reps > 0 |
+| Time | seconds > 0 |
+
+Assisted work treats the *lowest* assistance as the best set. Assisted and
+timed exercises hide or relabel the boxes to suit.
 
 **A set can only be ticked once it's logged** according to its measure (table
 above). Unticking is always allowed.
 
-**Warm-up sets** — *+ Warm-up* adds one at the top at roughly half the
-working weight; tapping a set's number toggles it. They're logged but never
-count: not for progression, records, volume, or whether a session "did" the
+**Warm-up sets** — tapping a set's number toggles it. They're logged but never
+count: not for records, volume, prefill, or whether a session "did" the
 exercise, and last session's numbers line up against working sets only.
-
-**±** chips step every un-ticked set by the exercise's increment, so a stack
-that doesn't match the suggestion is two taps rather than a decimal pad.
 
 **Timed holds have a timer**: ▶ counts up in place of the seconds field, ■
 writes the time. It buzzes as you pass the target.
@@ -146,10 +160,29 @@ countdown itself is stored as an absolute end time and rendered from the wall
 clock, so it can't drift or stall. Length is per-exercise and takes effect
 immediately, even mid-session.
 
+**Text follows the phone's text-size setting** (Settings › Display & Brightness
+› Text Size, and the accessibility sizes). Rows of fields — a set's weight and
+reps, a workout's sets and rep range, the reorder buttons — stack vertically at
+the accessibility sizes rather than squeezing to "…".
+
 **During a session the screen stays awake**, so a phone on the bench doesn't
 need unlocking between sets. Only while the session screen is showing.
 
-**Progress** plots, per session, the best **estimated one-rep max** for
+**Progress** leads with a sentence rather than a shape: what you last did
+("70 kg × 12") and how it compares ("Best yet", "Up 5 kg on last time", "Same
+weight, 2 more reps"). The comparison is in the weight you actually loaded, not
+the estimate, because "up 6.67 kg" is nobody's idea of progress. Only exercises
+you've logged are listed, most recently trained first; the weekly volume card
+sits below the lift and draws only the weeks you have.
+
+**The chart plots one of four metrics**, switchable above it: est. 1RM
+(the default), heaviest set, reps, or volume. A weight-only line can sit flat
+for months while the reps underneath it climb, and the estimate extrapolates
+hard once a set passes about twelve reps — so neither is the whole story on its
+own. Where the number comes from a single set, the point is labelled with that
+set ("59×12") rather than the derived figure.
+
+Under that it plots, per session, the best **estimated one-rep max** for
 weighted work (Epley, `weight × (1 + reps/30)`) — so the line moves while reps
 climb at one weight, not only when the weight changes — and otherwise the best
 set in the exercise's own unit: seconds, reps, or for assisted work the
@@ -157,10 +190,28 @@ assistance, labelled *lower is better*.
 
 **Personal records** are derived from history, never stored, so they can't go
 stale: heaviest set and best estimated 1RM (Epley) for weighted work, least
-assistance, most reps, longest hold. They show under the Progress chart, a
-session's detail lists any it set, and finishing a session that beat one pops
-a summary. A record counts when it strictly beats every earlier session — so
-your first session sets the baseline.
+assistance, most reps, longest hold. All of them show under the Progress chart.
+
+What gets *announced* is narrower, so the one line that matters isn't buried:
+finishing a session reports **at most one record per exercise** — the heaviest
+set where there is one, otherwise the estimate, which is what catches more reps
+at the same weight — and says nothing at all for an exercise's first session,
+since a baseline isn't a record. Ties at the same weight keep the better set.
+
+**Share this workout** (on any session in History) puts a plain-text summary on
+the share sheet, for sending to whoever asks what you did:
+
+```
+Full Body — Thu, 24 Sep
+48 min · 18 sets
+
+Leg press — 70 kg × 10, 11, 12
+Plank — 45s, 45s, 45s
+
+Best yet: Leg press 70 kg × 12
+```
+
+Warm-ups, un-ticked sets and exercises you didn't log are left out.
 
 **Weekly volume** is working sets per muscle group per week — the unit the
 10–20 sets/muscle guideline uses, and a fair comparison across a leg press and
@@ -178,13 +229,15 @@ sheet.
 | Path | |
 |---|---|
 | `ios/GymLogger/Core/Models.swift` | value types for the whole data model |
-| `ios/GymLogger/Core/Logic.swift` | last-session lookup, suggestion rule, progress series |
+| `ios/GymLogger/Core/Logic.swift` | last-session lookup, prefill, progress series |
 | `ios/GymLogger/Core/Decoding.swift` | forgiving decode — see below |
 | `ios/GymLogger/Core/Presets.swift` | exercise catalogue and standard workouts |
 | `ios/GymLogger/Core/Records.swift` | personal records and weekly volume, derived from history |
+| `ios/GymLogger/Core/DataFile.swift` | reading and writing the one file, and recovering from a damaged one |
 | `ios/GymLogger/Store.swift` | persistence, notifications, SwiftUI plumbing |
 | `ios/GymLogger/Views/` | one file per screen, plus `Theme` and `Components` |
-| `ios/Tests/CoreTests/` | 137 unit tests over the logic layer |
+| `ios/Tests/CoreTests/` | 188 unit tests over the logic layer |
+| `ios/UITests/` | 6 screen tests driving the real UI |
 | `ios/build-ipa.sh` | unsigned `.ipa` for sideloading |
 
 `Core/` is deliberately plain Foundation — no SwiftUI, no Combine — so the part
@@ -196,7 +249,7 @@ Linux CI.
 One JSON file in Application Support:
 
 - `exercises` — the durable identity of a movement: name, note, rest,
-  increment, `measure` (`weight` · `assisted` · `bodyweight` · `time`) and
+  `measure` (`weight` · `assisted` · `bodyweight` · `time`) and
   `muscle` (chest · back · shoulders · arms · legs · core, or none)
 - `templates` — an ordered list of `{exerciseId, sets, targetMin, targetMax}`
 - `sessions` — what actually happened, with name and note snapshotted; each
@@ -221,18 +274,34 @@ field fall back instead. If the file is unreadable outright, `Store` moves it to
 cd ios && swift test
 ```
 
-137 tests over the logic layer: double progression for each measure and every
-way it should *not* fire, warm-up sets never counting, set-completion rules,
+197 tests over the logic layer: the progression cue for each measure and the
+cases that must not trigger it, every prefill across the four measures, warm-up
+sets never counting, set-completion rules,
 rep ranges, estimated-max progress, personal records and when one counts as
 new, weekly sets per muscle, which workout is next, duplicating and adding to
-workouts, weight stepping, per-exercise history lookup, note propagation, the
+workouts, per-exercise history lookup, note propagation, the
 wall-clock timer, decode robustness (including files from before measures,
 ranges, muscles and warm-ups existed), exercise deletion, backup restore, and
 the exercise catalogue and presets. No Xcode needed — it runs on the command line.
 
-The SwiftUI layer has no automated coverage. It builds clean with Xcode 26, is
-exercised by hand on an iPhone 17 Pro simulator (iOS 26.5), and now runs on a
-physical iPhone on iOS 27, sideloaded with SideStore.
+Six **screen tests** drive the real UI through the flows that matter, in
+`ios/UITests/`:
+
+```sh
+cd ios && xcodebuild test -project GymLogger.xcodeproj -scheme GymLogger \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+They cover logging a set (a set can't be ticked until it's logged, and can once
+it is), finishing a session and finding it in History, sharing it, removing an
+exercise from a workout, adding one from the catalogue, and Export offering the
+backup file. The last three are regression tests for bugs found on a phone.
+Each launches with `--uitest-reset`, so it starts from the seeded workout in a
+throwaway file and never touches real data.
+
+That leaves the rest of the SwiftUI layer without automated coverage. It builds
+clean with Xcode 26, is exercised by hand on an iPhone 17 Pro simulator
+(iOS 26.5), and runs on a physical iPhone on iOS 27, sideloaded with SideStore.
 
 Running it on a phone is what found the first two view-layer bugs, both of them
 in code that had been written but never actually run: removing an exercise from

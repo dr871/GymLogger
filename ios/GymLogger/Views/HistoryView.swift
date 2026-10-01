@@ -37,6 +37,12 @@ struct SessionDetailView: View {
     let sessionId: String
     @State private var confirmDelete = false
     @State private var pendingDelete = false
+    @State private var shareText: ShareText?
+
+    struct ShareText: Identifiable {
+        let id = UUID()
+        let text: String
+    }
 
     private var sessionIndex: Int? {
         store.data.sessions.firstIndex { $0.id == sessionId }
@@ -56,13 +62,16 @@ struct SessionDetailView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { hideKeyboard() }
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
             }
         }
         .onDisappear {
             // Mutate only once every field bound to this session's index is
             // off screen — see pendingDelete.
             if pendingDelete { store.deleteSession(id: sessionId) }
+        }
+        .sheet(item: $shareText) { share in
+            ShareSheet(items: [share.text])
         }
         .alert("Delete this session?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
@@ -83,10 +92,10 @@ struct SessionDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Format.longDate(session.startedAt))
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.app(22, weight: .bold))
                         .foregroundStyle(Palette.text)
                     Text(subtitle(for: session))
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Palette.muted)
                 }
                 .padding(.top, 4)
@@ -95,12 +104,12 @@ struct SessionDetailView: View {
                 if !records.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Records set")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
                         ForEach(Array(records.enumerated()), id: \.offset) { _, hit in
                             if let entry = session.entries.first(where: { $0.exerciseId == hit.exerciseId }) {
                                 Text("\(entry.name) — \(hit.record.kind.title.lowercased()) \(hit.record.text(measure: entry.measure))")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.app(15, weight: .semibold))
                                     .foregroundStyle(Palette.accent)
                             }
                         }
@@ -113,27 +122,27 @@ struct SessionDetailView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(entry.name)
-                                .font(.system(size: 19, weight: .bold))
+                                .font(.app(19, weight: .bold))
                                 .foregroundStyle(Palette.text)
                             if !entry.note.isEmpty {
                                 Text(entry.note)
-                                    .font(.system(size: 13))
+                                    .font(.app(13))
                                     .foregroundStyle(Palette.warn)
                             }
                         }
 
                         if entry.doneSets.isEmpty {
                             Text("Not logged")
-                                .font(.system(size: 15))
+                                .font(.app(15))
                                 .foregroundStyle(Palette.muted)
                         } else {
                             ForEach(Array(entry.sets.enumerated()), id: \.element.id) { setIndex, set in
                                 if set.done {
                                     HStack(spacing: 8) {
                                         Text(entry.workingIndex(of: setIndex).map { "\($0 + 1)" } ?? "W")
-                                            .font(.system(size: 14, weight: set.warmup ? .semibold : .regular))
+                                            .font(.app(14, weight: set.warmup ? .semibold : .regular))
                                             .foregroundStyle(set.warmup ? Palette.warn : Palette.ghost)
-                                            .frame(width: 20)
+                                            .frame(minWidth: 20)
 
                                         if entry.measure.usesWeight {
                                             WeightField(value: $store.data.sessions[index].entries[entryIndex].sets[setIndex].weight,
@@ -144,11 +153,11 @@ struct SessionDetailView: View {
                                                   placeholder: entry.measure.repsNoun)
 
                                         if entry.measure == .time {
-                                            Text("s").font(.system(size: 15)).foregroundStyle(Palette.muted)
+                                            Text("s").font(.app(15)).foregroundStyle(Palette.muted)
                                         }
 
                                         Image(systemName: "checkmark")
-                                            .font(.system(size: 18, weight: .bold))
+                                            .font(.app(18, weight: .bold))
                                             .foregroundStyle(Palette.accentInk)
                                             .frame(width: Metrics.tap, height: Metrics.tap)
                                             .background(Palette.accent)
@@ -160,6 +169,11 @@ struct SessionDetailView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .card()
+                }
+
+                if let text = store.shareText(sessionId: sessionId) {
+                    Button("Share this workout") { shareText = ShareText(text: text) }
+                        .buttonStyle(BigButtonStyle())
                 }
 
                 Button("Delete this session") { confirmDelete = true }

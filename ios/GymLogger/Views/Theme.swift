@@ -28,6 +28,28 @@ extension Color {
     }
 }
 
+/// Text that follows the phone's own text-size setting (Settings › Display &
+/// Brightness › Text Size, and the larger accessibility sizes). Each fixed size
+/// the app was designed around maps to the system text style nearest it, so the
+/// proportions hold while everything scales together.
+extension Font {
+    static func app(_ size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        let style: Font.TextStyle
+        switch Int(size) {
+        case ..<12: style = .caption2
+        case 12: style = .caption
+        case 13: style = .footnote
+        case 14, 15: style = .subheadline
+        case 16: style = .callout
+        case 17, 18: style = .body
+        case 19, 20, 21: style = .title3
+        case 22...24: style = .title2
+        default: style = .title
+        }
+        return .system(style, design: design, weight: weight)
+    }
+}
+
 enum Metrics {
     /// Nothing tappable goes below this.
     static let tap: CGFloat = 52
@@ -60,7 +82,7 @@ struct ChipStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: filled ? .semibold : .regular))
+            .font(.app(15, weight: filled ? .semibold : .regular))
             .foregroundStyle(filled ? Palette.accentInk : tint)
             .padding(.horizontal, 15)
             .frame(minHeight: 46)

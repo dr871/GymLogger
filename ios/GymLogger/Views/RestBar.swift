@@ -17,12 +17,12 @@ struct RestBar: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(done ? "Rest done" : Format.clock(remaining))
-                        .font(.system(size: 26, weight: .regular, design: .rounded))
+                        .font(.app(26, weight: .regular, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(done ? Palette.accent : Palette.text)
                     if !timer.label.isEmpty {
                         Text(timer.label)
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
                             .lineLimit(1)
                     }
@@ -36,7 +36,7 @@ struct RestBar: View {
                     store.cancelRest()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.app(16, weight: .semibold))
                         .frame(width: 48, height: 48)
                 }
                 .buttonStyle(ChipStyle())

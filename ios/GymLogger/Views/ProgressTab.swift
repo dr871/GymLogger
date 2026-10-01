@@ -4,22 +4,23 @@ import Charts
 struct ProgressTab: View {
     @EnvironmentObject var store: Store
     @State private var selectedId: String?
+    @State private var metric: ProgressMetric = .estimatedMax
 
-    private var exercises: [Exercise] { store.data.orderedExercises }
+    /// Only what you've actually done: an exercise you've never logged has
+    /// nothing to plot, and offering it just raises the question.
+    private var exercises: [Exercise] { store.data.loggedExercises }
 
     private var chosen: Exercise? {
         if let selectedId, let match = exercises.first(where: { $0.id == selectedId }) { return match }
-        return exercises.first { !store.data.progressSeries(for: $0.id).isEmpty } ?? exercises.first
+        return exercises.first
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    volumeCard
-
                     if exercises.isEmpty {
-                        EmptyHint(text: "No exercises yet.")
+                        EmptyHint(text: "Nothing logged yet. Finish a session and your lifts show up here.")
                     } else {
                         SectionHeader(title: "Exercise")
                         picker
@@ -28,25 +29,54 @@ struct ProgressTab: View {
                             let series = store.data.progressSeries(for: exercise.id)
 
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(chartTitle(exercise))
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(Palette.muted)
+                                if let summary = store.data.progressSummary(for: exercise.id) {
+                                    Text(summary.headline)
+                                        .font(.app(22, weight: .bold))
+                                        .foregroundStyle(Palette.text)
+                                    if let trend = summary.trend {
+                                        Text(trend)
+                                            .font(.app(15))
+                                            .foregroundStyle(trend == "Best yet" ? Palette.accent : Palette.muted)
+                                    }
+                                }
 
-                                chart(series: series)
+                                Text(chartTitle(exercise))
+                                    .font(.app(13))
+                                    .foregroundStyle(Palette.ghost)
+                                    .padding(.top, 4)
+
+                                if exercise.measure == .weight {
+                                    Picker("Metric", selection: $metric) {
+                                        ForEach(ProgressMetric.allCases) { m in
+                                            Text(m.title).tag(m)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .padding(.vertical, 2)
+
+                                    chart(series: series, metric: metric)
+                                } else {
+                                    chart(series: series, metric: nil)
+                                }
 
                                 records(for: exercise)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .card()
 
+                            volumeCard
+                                .padding(.top, 8)
+
+                            SectionHeader(title: "Sessions")
+
                             ForEach(series.reversed()) { point in
                                 HStack {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(Format.date(point.date))
-                                            .font(.system(size: 17, weight: .semibold))
+                                            .font(.app(17, weight: .semibold))
                                             .foregroundStyle(Palette.text)
                                         Text(rowSubtitle(point))
-                                            .font(.system(size: 14))
+                                            .font(.app(14))
                                             .foregroundStyle(Palette.muted)
                                     }
                                     Spacer()
@@ -80,14 +110,14 @@ struct ProgressTab: View {
                 ForEach(records) { record in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(record.kind.title)
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Palette.muted)
                         Text(record.text(measure: exercise.measure))
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.app(16, weight: .semibold))
                             .monospacedDigit()
                             .foregroundStyle(Palette.text)
                         Text(Format.date(record.date))
-                            .font(.system(size: 12))
+                            .font(.app(12))
                             .foregroundStyle(Palette.ghost)
                     }
                     .padding(.horizontal, 12)
@@ -102,7 +132,8 @@ struct ProgressTab: View {
 
     /// Working sets per muscle, the last eight weeks, current week last.
     private var volumeCard: some View {
-        let weeks = store.data.weeklyVolume(weeks: 8)
+        let span = store.data.weeksOfHistory(max: 8)
+        let weeks = store.data.weeklyVolume(weeks: span)
         let series = VolumeBar.rows(for: weeks)
         // Explicit types: the type-checker choked on this inline (17 min build).
         let firstWeek: Date = weeks.first?.weekStart ?? Date()
@@ -111,13 +142,14 @@ struct ProgressTab: View {
         let domain: ClosedRange<Date> = firstWeek...windowEnd
 
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Sets per muscle — last 8 weeks")
-                .font(.system(size: 14))
+            Text(span == 1 ? "Sets per muscle — this week"
+                            : "Sets per muscle — last \(span) weeks")
+                .font(.app(14))
                 .foregroundStyle(Palette.muted)
 
             if series.isEmpty {
                 Text("Nothing logged in the last eight weeks.")
-                    .font(.system(size: 15))
+                    .font(.app(15))
                     .foregroundStyle(Palette.muted)
                     .padding(.vertical, 12)
             } else {
@@ -148,7 +180,7 @@ struct ProgressTab: View {
 
                 if let now = weeks.last {
                     Text("This week: \(Format.muscleBreakdown(now))")
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Palette.muted)
                 }
             }
@@ -173,33 +205,51 @@ struct ProgressTab: View {
     /// should be heading down.
     private func chartTitle(_ exercise: Exercise) -> String {
         switch exercise.measure {
-        case .weight: return "\(exercise.name) — est. 1RM (kg)"
+        case .weight:
+            // The picker already names the metric, so keep its capitalisation
+            // ("est. 1rm" reads as a typo) and don't repeat it as a unit —
+            // Reps is measured in reps.
+            let unit = metric.unit
+            guard unit.caseInsensitiveCompare(metric.title) != .orderedSame else {
+                return "\(exercise.name) — \(metric.title)"
+            }
+            return "\(exercise.name) — \(metric.title) (\(unit))"
         case .assisted: return "\(exercise.name) — best set (\(exercise.measure.unit)) · lower is better"
         case .bodyweight, .time: return "\(exercise.name) — best set (\(exercise.measure.unit))"
         }
     }
 
     @ViewBuilder
-    private func chart(series: [ProgressPoint]) -> some View {
-        let points = series.compactMap { point -> (Date, Double)? in
-            point.value.map { (point.date, $0) }
+    private func chart(series: [ProgressPoint], metric: ProgressMetric?) -> some View {
+        let points = series.compactMap { point -> (ProgressPoint, Double)? in
+            let value = metric.map { point.value(for: $0) } ?? point.value
+            return value.map { (point, $0) }
         }
 
         if points.isEmpty {
             Text("No data yet — log this exercise and it will show up here.")
-                .font(.system(size: 15))
+                .font(.app(15))
                 .foregroundStyle(Palette.muted)
                 .padding(.vertical, 20)
         } else {
             Chart {
                 ForEach(Array(points.enumerated()), id: \.offset) { _, point in
-                    AreaMark(x: .value("Date", point.0), y: .value("Value", point.1))
+                    AreaMark(x: .value("Date", point.0.date), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent.opacity(0.14))
-                    LineMark(x: .value("Date", point.0), y: .value("Value", point.1))
+                    LineMark(x: .value("Date", point.0.date), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent)
                         .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
-                    PointMark(x: .value("Date", point.0), y: .value("Value", point.1))
+                    PointMark(x: .value("Date", point.0.date), y: .value("Value", point.1))
                         .foregroundStyle(Palette.accent)
+                        .annotation(position: .top) {
+                            // Few sessions: two dots and a slope say less than
+                            // two numbers do.
+                            if points.count <= 6 {
+                                Text(pointLabel(point.0, value: point.1, metric: metric))
+                                    .font(.app(12, weight: .semibold))
+                                    .foregroundStyle(Palette.muted)
+                            }
+                        }
                 }
             }
             .chartYScale(domain: .automatic(includesZero: false))
@@ -215,6 +265,20 @@ struct ProgressTab: View {
                 }
             }
             .frame(height: 190)
+        }
+    }
+
+    /// For the metrics that come from one set, name that set — a line that
+    /// rises purely on reps at an unchanged weight otherwise says nothing
+    /// about why it rose.
+    private func pointLabel(_ point: ProgressPoint, value: Double, metric: ProgressMetric?) -> String {
+        switch metric {
+        case .estimatedMax, .heaviest, nil:
+            return point.topSetText ?? Format.weight(value)
+        case .reps:
+            return "\(Int(value))"
+        case .volume:
+            return Format.weight(value.rounded())
         }
     }
 

@@ -14,9 +14,9 @@ struct HomeView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Resume \(active.name)")
-                                    .font(.system(size: 21, weight: .bold))
+                                    .font(.app(21, weight: .bold))
                                 Text("\(active.completedSetCount) set\(active.completedSetCount == 1 ? "" : "s") done · started \(Format.time(active.startedAt))")
-                                    .font(.system(size: 14))
+                                    .font(.app(14))
                                     .opacity(0.75)
                             }
                         }
@@ -37,9 +37,9 @@ struct HomeView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Start \(template.name)")
-                                        .font(.system(size: 21, weight: .bold))
+                                        .font(.app(21, weight: .bold))
                                     Text(templateSubtitle(template, isNext: template.id == next))
-                                        .font(.system(size: 14))
+                                        .font(.app(14))
                                         .opacity(0.75)
                                 }
                             }
@@ -62,13 +62,13 @@ struct HomeView: View {
                     if let week = thisWeek {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("This week")
-                                .font(.system(size: 13))
+                                .font(.app(13))
                                 .foregroundStyle(Palette.muted)
                             Text("\(week.now.totalSets) set\(week.now.totalSets == 1 ? "" : "s") · last week \(week.last.totalSets)")
-                                .font(.system(size: 17, weight: .semibold))
+                                .font(.app(17, weight: .semibold))
                                 .foregroundStyle(Palette.text)
                             Text(Format.muscleBreakdown(week.now))
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Palette.muted)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -93,7 +93,7 @@ struct HomeView: View {
 
                     if let nudge = exportNudge {
                         Text(nudge)
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.warn)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 8)
@@ -155,10 +155,10 @@ struct SessionRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Format.date(session.startedAt))
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
                     .foregroundStyle(Palette.text)
                 Text("\(session.name) · \(session.workedExerciseCount) exercise\(session.workedExerciseCount == 1 ? "" : "s") · \(session.completedSetCount) set\(session.completedSetCount == 1 ? "" : "s")")
-                    .font(.system(size: 14))
+                    .font(.app(14))
                     .foregroundStyle(Palette.muted)
             }
             Spacer()

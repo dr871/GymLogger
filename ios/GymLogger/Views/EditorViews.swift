@@ -27,7 +27,7 @@ struct TemplateEditorView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { hideKeyboard() }
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
             }
         }
         .sheet(isPresented: $showPicker) {
@@ -76,10 +76,10 @@ struct TemplateEditorView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(store.exercise(id: item.exerciseId)?.name ?? "Missing exercise")
-                                    .font(.system(size: 19, weight: .bold))
+                                    .font(.app(19, weight: .bold))
                                     .foregroundStyle(Palette.text)
                                 Text(itemSubtitle(item))
-                                    .font(.system(size: 13))
+                                    .font(.app(13))
                                     .foregroundStyle(Palette.muted)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -87,9 +87,9 @@ struct TemplateEditorView: View {
                         }
                         .buttonStyle(.plain)
 
-                        HStack(spacing: 10) {
+                        AdaptiveRow(spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Sets").font(.system(size: 13)).foregroundStyle(Palette.muted)
+                                Text("Sets").font(.app(13)).foregroundStyle(Palette.muted)
                                 let sets = itemBinding(index, itemIndex, \.sets, fallback: 0)
                                 RepsField(value: Binding(
                                     get: { sets.wrappedValue },
@@ -99,7 +99,7 @@ struct TemplateEditorView: View {
                             let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(measure == .time ? "Secs, min–max" : "Reps, min–max")
-                                    .font(.system(size: 13)).foregroundStyle(Palette.muted)
+                                    .font(.app(13)).foregroundStyle(Palette.muted)
                                 HStack(spacing: 6) {
                                     RepsField(value: itemBinding(index, itemIndex, \.targetMin, fallback: nil),
                                               placeholder: "\(measure.defaultTarget.min)")
@@ -112,7 +112,7 @@ struct TemplateEditorView: View {
 
                         // Buttons, not drag handles: reordering has to work with
                         // damp fingers and one hand.
-                        HStack(spacing: 8) {
+                        AdaptiveRow(spacing: 8) {
                             Button("▲ Up") { move(index: index, from: itemIndex, by: -1) }
                                 .buttonStyle(ChipStyle())
                                 .disabled(itemIndex == 0)
@@ -173,8 +173,8 @@ struct TemplateEditorView: View {
         let measure = store.exercise(id: item.exerciseId)?.measure ?? .weight
         var parts = ["rest \(store.data.restSec(for: item.exerciseId))s"]
         switch measure {
-        case .weight: parts.append("+\(Format.weight(store.data.increment(for: item.exerciseId))) kg")
-        case .assisted: parts.append("−\(Format.weight(store.data.increment(for: item.exerciseId))) kg assistance")
+        case .weight: break
+        case .assisted: parts.append("assisted")
         case .bodyweight: parts.append("bodyweight")
         case .time: parts.append("timed")
         }
@@ -213,7 +213,7 @@ struct ExerciseEditorView: View {
 
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Machine settings note")
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Palette.muted)
                             TextField("e.g. seat 4, handles 2", text: $store.data.exercises[index].notes)
                                 .foregroundStyle(Palette.warn)
@@ -232,12 +232,12 @@ struct ExerciseEditorView: View {
                         )
 
                         Text("The note shows on this exercise every session.")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Measured by")
-                                .font(.system(size: 14))
+                                .font(.app(14))
                                 .foregroundStyle(Palette.muted)
                             Picker("Measured by", selection: $store.data.exercises[index].measure) {
                                 ForEach(Measure.allCases, id: \.self) { Text($0.title).tag($0) }
@@ -254,7 +254,7 @@ struct ExerciseEditorView: View {
                         )
 
                         Text(measureHelp(store.data.exercises[index].measure))
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
 
                         LabeledField(label: "Muscle group") {
@@ -269,7 +269,7 @@ struct ExerciseEditorView: View {
                         }
 
                         Text("Counts this exercise's sets towards weekly volume on Progress.")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
 
                         LabeledField(label: "Rest timer (sec)") {
@@ -277,16 +277,8 @@ struct ExerciseEditorView: View {
                                       placeholder: "\(store.data.settings.defaultRestSec)")
                         }
 
-                        if store.data.exercises[index].measure.usesWeight {
-                            LabeledField(label: store.data.exercises[index].measure == .assisted
-                                         ? "Reduce assistance by (kg)" : "Increase step (kg)") {
-                                WeightField(value: $store.data.exercises[index].increment,
-                                            placeholder: Format.weight(store.data.settings.defaultIncrement))
-                            }
-                        }
-
-                        Text("Leave blank to use the defaults from Settings.")
-                            .font(.system(size: 13))
+                        Text("Leave blank to use the default rest from Settings.")
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
 
                         Button("Delete this exercise") { confirmDelete = true }
@@ -321,7 +313,7 @@ struct ExerciseEditorView: View {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { hideKeyboard() }
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.app(17, weight: .semibold))
             }
         }
     }
@@ -330,13 +322,13 @@ struct ExerciseEditorView: View {
 private func measureHelp(_ measure: Measure) -> String {
     switch measure {
     case .weight:
-        return "Log the weight and reps. Once every set hits the top of the rep range, the weight goes up and reps drop back to the bottom."
+        return "Log the weight and reps. Today starts prefilled with last session, set for set."
     case .assisted:
-        return "Log the assistance and reps — 0 means unassisted. Once every set hits the top of the range, the assistance goes down."
+        return "Log the assistance and reps — 0 means unassisted. Lower is better. Today starts prefilled with last session."
     case .bodyweight:
-        return "Reps only, no weight box. Once every set matches your best, one more rep is suggested, up to the top of the range."
+        return "Reps only, no weight box. Today starts prefilled with last session, set for set."
     case .time:
-        return "Seconds only, no weight box. Once every set matches your best, five more seconds are suggested, up to the top of the range."
+        return "Seconds only, no weight box. Today starts prefilled with last session, set for set."
     }
 }
 
@@ -349,6 +341,7 @@ struct ExercisePickerView: View {
 
     let onPick: (String) -> Void
     @State private var search = ""
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var query: String {
         search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -429,7 +422,7 @@ struct ExercisePickerView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") { hideKeyboard() }
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.app(17, weight: .semibold))
                 }
             }
             .screen()
@@ -441,12 +434,12 @@ struct ExercisePickerView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(name)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.app(17, weight: .semibold))
                         .foregroundStyle(Palette.text)
                     Text(detail)
-                        .font(.system(size: 14))
+                        .font(.app(14))
                         .foregroundStyle(Palette.muted)
-                        .lineLimit(1)
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
                 }
                 Spacer()
                 Image(systemName: "plus").foregroundStyle(Palette.ghost)

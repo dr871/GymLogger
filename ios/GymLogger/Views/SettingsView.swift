@@ -44,18 +44,11 @@ struct SettingsView: View {
                         ), placeholder: "90")
                     }
 
-                    LabeledField(label: "Weight increase step (kg)") {
-                        WeightField(value: Binding(
-                            get: { store.data.settings.defaultIncrement },
-                            set: { if let v = $0 { store.data.settings.defaultIncrement = v } }
-                        ), placeholder: "2.5")
-                    }
-
                     SectionHeader(title: "Rest alerts")
 
                     if store.notificationsAllowed {
                         Text("Notifications on. Rest finishing will reach you with the app closed or the phone locked.")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
                     } else if store.notificationsDenied {
                         // iOS returns false without a prompt once denied; the
@@ -73,14 +66,14 @@ struct SettingsView: View {
                         .buttonStyle(BigButtonStyle())
 
                         Text("Without this the timer still runs, but it can only buzz while the app is open.")
-                            .font(.system(size: 13))
+                            .font(.app(13))
                             .foregroundStyle(Palette.muted)
                     }
 
                     SectionHeader(title: "Backup")
 
                     Text("Exports everything — exercises, workouts and every session — as a JSON file.")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
 
                     Button("Export all data (JSON)") {
@@ -95,25 +88,25 @@ struct SettingsView: View {
                     .buttonStyle(BigButtonStyle())
 
                     Text(exportStatus)
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
 
                     Text("A copy is also kept up to date in the Files app: On My iPhone › GymLogger › GymLogger-backup.json.")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
                         .padding(.top, 12)
 
                     SectionHeader(title: "Restore")
 
                     Text("Loads a backup file and replaces everything on this phone with it. You'll see what's in the file before anything changes.")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
 
                     Button("Restore from backup…") { showImporter = true }
                         .buttonStyle(BigButtonStyle())
 
                     Text("All data lives on this phone only. Deleting the app erases it.")
-                        .font(.system(size: 13))
+                        .font(.app(13))
                         .foregroundStyle(Palette.muted)
                         .padding(.top, 12)
                 }
@@ -141,6 +134,8 @@ struct SettingsView: View {
                     do {
                         pendingRestore = try store.previewRestore(url: url)
                         confirmRestore = true
+                    } catch RestoreError.tooNew(let fileVersion, _) {
+                        restoreError = "That backup was made by a newer version of GymLogger (format \(fileVersion)). Update the app, then restore — loading it here would quietly drop whatever this version doesn't understand."
                     } catch RestoreError.empty {
                         restoreError = "That file has no exercises or sessions in it, so there is nothing to restore."
                     } catch {
